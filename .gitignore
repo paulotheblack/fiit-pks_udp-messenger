@@ -1,1 +1,9 @@
-docs/2_zadanie_PKS_ZS2021.pdf
+docs/*
+src/scratchpad
+scratchpad
+
+venv/*
+src/__pycache__/*
+src/osi/__pycache__/*
+.idea/
+*.iws /out/
