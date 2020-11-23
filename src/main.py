@@ -5,7 +5,8 @@ from src.sender import Sender
 def main():
     socket = Sock()
 
-    sender = Sender(socket.get_socket())
+    sender = Sender(socket)
+    sender.run()
 
 
 if __name__ == '__main__':
