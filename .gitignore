@@ -1,9 +1,10 @@
 docs/*
-src/scratchpad
+src/__init__.py
+src/misc/__init__.py
 scratchpad
 
 venv/*
 src/__pycache__/*
-src/osi/__pycache__/*
+src/misc/__pycache__/
 .idea/
 *.iws /out/

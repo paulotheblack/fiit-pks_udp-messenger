@@ -1,13 +1,15 @@
 from src.sock import Sock
-from src.parser import Parser
-from src.cli import Cli
+from src.misc.parser import Parser
+from src.sender import Sender
+from src.misc.cli import Cli
 
 
 def main():
     socket = Sock()
-    sender = Parser(socket)
-    cmd = Cli(sender, socket)
+    parser = Parser(socket)
+    sender = Sender(socket, parser)
 
+    cmd = Cli(socket, parser, sender)
     cmd.run()
 
 
