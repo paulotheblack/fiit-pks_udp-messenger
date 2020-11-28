@@ -14,20 +14,20 @@ class Cli:
 
     def welcome(self):
         print(
-            f'Welcome!\n'
-            f'Your address is set to: {self.socket.getsockname()}\n'
+            f'\t\tWelcome!\n'
             f'type ":c" to establish connection\n'
             f'type ":m" to send message\n'
             f'type ":f" to send file\n'
             f'type ":s" to change settings\n'
             f'type ":q" to exit program\n'
+            f'Your address is set to: {self.socket.getsockname()}\n'
         )
 
-    def run(self):
+    def stdin(self):
         self.welcome()
 
         while True:
-            action = input('$ ')
+            action = input('')
 
             if action == ':c':  # establish connection
                 self.sender.send_syn()

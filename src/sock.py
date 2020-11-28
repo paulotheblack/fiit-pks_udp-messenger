@@ -7,14 +7,15 @@ class Sock:
     local_address: tuple
     _sock: socket
 
-    def __init__(self):
-        self.create_socket()
+    def __init__(self, ip, port):
+        self.create_socket(ip, port)
 
-    def create_socket(self, address='127.0.0.1', port=42040):
+    def create_socket(self, address, port):
         self.local_ip = address
-        self.local_port = port
+        self.local_port = int(port)
         self.local_address = (self.local_ip, self.local_port)
         self._sock = socket(AF_INET, SOCK_DGRAM)
+
         try:
             self._sock.bind(self.local_address)
         except PermissionError:
@@ -27,10 +28,3 @@ class Sock:
     def close_socket(self, msg='Socket have been closed'):
         print(msg)
         self._sock.close()
-
-    def set_locale(self):
-        address = input('$ Local IP address (localhost): ')
-        port = int(input('$ at port: '))
-
-        self.close_socket(msg='Closing previously created socket.')
-        self.create_socket(address, port)

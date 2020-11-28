@@ -1,6 +1,7 @@
 import math
 import struct
-from threading import Thread
+import argparse
+import textwrap
 
 """
 custom header: 8B
@@ -10,28 +11,42 @@ _DGRAM_NO   -- B (1B)
 _CRC        -- H (2B)
 
 _FLAGS:
-    0: SYN
-    1: ACK
-    2: SYN_MSG
-    3: SYN_FILE
-    4: NACK
-    5: KEEP_ALIVE
-    6: 
+    0: SYN (two-way handshake)
+    1: ACK (      --||--     )
+    2: REQUEST [LAST_BATCH, LAST_DGRAM, CRC, data='3(MSG) or 4(FILE)']
+    3: MSG 
+    4: FILE
+    5: ACK_MSG
+    6: ACK_FILE
+    7: NACK
+    8: KEEP_ALIVE
 """
 
 
 class Parser:
-    sockint = None  # custom socket interface 'class Socket'
-    socket = None  # Sock.sock
-    dest_addr = None  # Tuple[str, int]
+    HEADER_SIZE = 8
+    DGRAM_SIZE = 158 - HEADER_SIZE  # MAX SIZE 1492
+    BATCH_SIZE = 8  # MAX 8
 
-    HEADER_SIZE = 7
-    DGRAM_SIZE = 157 - HEADER_SIZE  # MAX SIZE 1493
-    BATCH_SIZE = 8  # MAX
+    @staticmethod
+    def parse_args():
+        ap = argparse.ArgumentParser(
+            prog='PCAP Analyzer',
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            description=textwrap.dedent('''\
+                    # ----------------------------------------------- #
+                    #   UDP Messenger, PKS assigment 2. v0.1          #
+                    #       Author:     Michal Paulovic               #
+                    #       STU-FIIT:   xpaulovicm1                   #
+                    #       Github:     paulotheblack                 #
+                    #   https://github.com/paulotheblack/udp_msngr    #
+                    # ----------------------------------------------- #
+                '''))
 
-    def __init__(self, sock):
-        self.sockint = sock
-        self.socket = sock.get_socket()
+        ap.add_argument('-a', help='Local IP address to bind')
+        ap.add_argument('-p', help='Local Port to bind')
+        args = ap.parse_args()
+        return vars(args)
 
     def get_info(self):
         print(
@@ -47,13 +62,19 @@ class Parser:
 
     # ------------------------------------------------ #
 
+    def get_header(self, dgram):
+        return struct.unpack('!B I B H', dgram[:self.HEADER_SIZE])
+
+    def get_data(self, dgram):
+        return dgram[self.HEADER_SIZE:]
+
+    # ------------------------------------------------ #
+
     @staticmethod
     def create_dgram(flags, batch_no, dgram_no, data):
-        CRC = 0000  # TODO implement checksum
+        CRC = 65535  # TODO implement checksum
         DATA = str(data).encode()
         HEADER = struct.pack('!B I B H', flags, batch_no, dgram_no, CRC)
-        # DATA = str(data)
-        # HEADER = 'f:' + ' ' + str(batch_no) + '-' + str(dgram_no) + '--- '
         return HEADER + DATA
 
     # parse data to dgrams/batches of dgrams
@@ -62,9 +83,10 @@ class Parser:
 
         # DATA can be send in single datagram
         if _DATA_LEN <= self.DGRAM_SIZE:
-            info_syn = self.create_dgram(0, 0, 0, self.BATCH_SIZE)
+            info_syn = self.create_dgram(2, 0, 0, flags)  # REQUEST
             return info_syn, self.create_dgram(flags, 0, 0, full_data)
 
+        # ------------------------------------------------ #
         # DATA can be send in single batch
         elif _DATA_LEN <= self.DGRAM_SIZE * self.BATCH_SIZE:
             batch = []
@@ -75,9 +97,11 @@ class Parser:
                 dgram = self.create_dgram(flags, 0, DGRAM_NO, data)
                 batch.append(dgram)
 
-            info_syn = self.create_dgram(0, 0, DGRAM_COUNT, self.BATCH_SIZE)
+            info_syn = self.create_dgram(2, 0, DGRAM_COUNT - 1, flags)  # REQUEST
             return info_syn, batch
 
+        # ------------------------------------------------ #
+        # DATA needs to be send in multiple batches
         else:
             batch = []
             message = []
@@ -103,15 +127,7 @@ class Parser:
 
                 message.append(batch.copy())
 
-            info_syn = self.create_dgram(0, BATCH_COUNT - 1, DGRAM_NO, self.BATCH_SIZE)
+            info_syn = self.create_dgram(2, BATCH_COUNT - 1, DGRAM_NO, flags)  # REQUEST
             return info_syn, message
 
     # ------------------------------------------------ #
-
-    @staticmethod
-    def get_header(dgram):
-        return struct.unpack('!B I B H', dgram[:8])
-
-    @staticmethod
-    def get_data(dgram):
-        return dgram[8:]
