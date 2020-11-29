@@ -1,8 +1,8 @@
 from src.sock import Sock
-from src.misc.parser import Parser
+from src.utils.parser import Parser
 from src.sender import Sender
 from src.listener import Listener
-from src.misc.cli import Cli
+from src.utils.cli import Cli
 
 
 def main():

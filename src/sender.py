@@ -1,5 +1,5 @@
 from src.sock import Sock
-from src.misc.parser import Parser
+from src.utils.parser import Parser
 from threading import Thread
 
 
