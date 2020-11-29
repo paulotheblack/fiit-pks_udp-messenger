@@ -31,7 +31,7 @@ class Parser:
     @staticmethod
     def parse_args():
         ap = argparse.ArgumentParser(
-            prog='PCAP Analyzer',
+            prog='UDP_Messenger',
             formatter_class=argparse.RawDescriptionHelpFormatter,
             description=textwrap.dedent('''\
                     # ----------------------------------------------- #
