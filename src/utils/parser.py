@@ -2,6 +2,7 @@ import math
 import struct
 import argparse
 import textwrap
+import itertools
 
 """
 custom header: 8B
@@ -12,7 +13,7 @@ _CRC        -- H (2B)
 
 _FLAGS:
     0: SYN (two-way handshake)
-    1: ACK (      --||--     )
+    1: ACK (     ___||___     )
     2: REQUEST [LAST_BATCH, LAST_DGRAM, CRC, data='3(MSG) or 4(FILE)']
     3: MSG 
     4: FILE
@@ -20,6 +21,8 @@ _FLAGS:
     6: ACK_FILE
     7: NACK
     8: KEEP_ALIVE
+    9: FILE_NAME
+    10: FIN
 """
 
 
@@ -28,6 +31,8 @@ class Parser:
     DGRAM_SIZE = 158 - HEADER_SIZE  # MAX SIZE 1492
     BATCH_SIZE = 8  # MAX 8
 
+    # ------------------ UTILS --------------------- #
+    # DONE
     @staticmethod
     def parse_args():
         ap = argparse.ArgumentParser(
@@ -48,65 +53,156 @@ class Parser:
         args = ap.parse_args()
         return vars(args)
 
+    # DONE
     def get_info(self):
         print(
-            f'--------------------------\n'
-            f'|>     HEADER_SIZE: {self.HEADER_SIZE}\n'
-            f'|>     DGRAM_SIZE: {self.DGRAM_SIZE}\n'
-            f'|>     BATCH_SIZE: {self.BATCH_SIZE}\n'
-            f'--------------------------\n'
+            f'-----------------------\n'
+            f'|>  HEADER_SIZE: {self.HEADER_SIZE}\n'
+            f'|>  DGRAM_SIZE: {self.DGRAM_SIZE}\n'
+            f'|>  BATCH_SIZE: {self.BATCH_SIZE}\n'
+            f'-----------------------'
         )
 
     def set_dgram_size(self):
-        self.DGRAM_SIZE = int(input('$ Desired DGRAM_SIZE in B (min. 1): '))
+        """
+            User defined DATAGRAM size (in B)
 
-    # ------------------------------------------------ #
+            Value can be only between 1 and 1500
+        """
+        desired_size = int(input('$ Desired DGRAM_SIZE in B (min. 1): '))
 
+        while desired_size < 1 or desired_size > 1500:
+            desired_size = int(input('! Incorrect DGRAM_SIZE\n$ in B (min. 1, max.1500): '))
+
+        self.DGRAM_SIZE = desired_size
+        print(f'$ DGRAM_SIZE set to: {self.DGRAM_SIZE}')
+
+    # DONE
+    @staticmethod
+    def crc16(data: bytes, poly=0x8408):
+        """
+            CRC-16-CCITT Algorithm
+
+            source: https://gist.github.com/oysstu/68072c44c02879a2abf94ef350d1c7c6
+        """
+        data = bytearray(data)
+        crc = 0xFFFF
+        for b in data:
+            cur_byte = 0xFF & b
+            for _ in range(0, 8):
+                if (crc & 0x0001) ^ (cur_byte & 0x0001):
+                    crc = (crc >> 1) ^ poly
+                else:
+                    crc >>= 1
+                cur_byte >>= 1
+        crc = (~crc & 0xFFFF)
+        crc = (crc << 8) | ((crc >> 8) & 0xFF)
+
+        return crc & 0xFFFF
+
+    # DONE
+    def check_checksum(self, header, data):
+        crc_header = struct.pack('!B I B H', header[0], header[1], header[2], 0)
+        crc_data = crc_header + data
+
+        crc = self.crc16(crc_data)
+        if crc == header[3]:
+            return True
+        else:
+            return False
+
+    @staticmethod
+    def get_file(path: str):
+        pass
+
+    # ------------ DGRAM DECOMPOSITION -------------- #
+    # DONE
     def get_header(self, dgram):
         return struct.unpack('!B I B H', dgram[:self.HEADER_SIZE])
 
+    # DONE
     def get_data(self, dgram):
         return dgram[self.HEADER_SIZE:]
 
-    # ------------------------------------------------ #
+    # ------------- DGRAM COMPOSITION --------------- #
 
-    @staticmethod
-    def create_dgram(flags, batch_no, dgram_no, data):
-        CRC = 65535  # TODO implement checksum
-        DATA = str(data).encode()
-        HEADER = struct.pack('!B I B H', flags, batch_no, dgram_no, CRC)
-        return HEADER + DATA
+    def create_dgram(self, flag, batch_no, dgram_no, data: bytearray):
+        """
+            TODO add docstring
 
-    # parse data to dgrams/batches of dgrams
-    def create_batch(self, flags, full_data):
-        _DATA_LEN = len(full_data)
+            args:
+                flag: int
+                batch_no: int
+                dgram_no: int
+                data: bytearray
 
-        # DATA can be send in single datagram
+            return:
+                DGRAM: bytearray
+
+            note:
+        """
+        # HEADER_ just for getting checksum (CRC assigned as 0)
+        _HEADER = struct.pack('!B I B H', flag, batch_no, dgram_no, 0)
+        _DGRAM = _HEADER + data
+
+        # compute checksum
+        CRC = self.crc16(_DGRAM)
+
+        # HEADER with proper checksum
+        HEADER = struct.pack('!B I B H', flag, batch_no, dgram_no, CRC)
+        return HEADER + data
+
+    def create_batch(self, flag, full_data):
+        """
+            Parse input data to batches of datagrams
+
+            args:
+                flags: int      flag for header (type of DATA)
+                full_data:      data to parse
+
+            return:
+                request: bytearray  request datagram with type of data as payload
+                -----
+                dgram: bytearray -               if message can be send in single DGRAM
+                batch: [bytearray] -             if message can be send in single batch
+                list_of_batches: [[bytearray]] - if message need to be send in list of batches
+
+        """
+        # if message, need to encode
+        if flag == 3:
+            _DATA = full_data.encode()
+        else:
+            _DATA = full_data
+
+        _DATA_LEN = len(_DATA)
+        _FLAG_B = str(flag).encode()
+
+        # SINGLE DATAGRAM
         if _DATA_LEN <= self.DGRAM_SIZE:
-            info_syn = self.create_dgram(2, 0, 0, flags)  # REQUEST
-            return info_syn, self.create_dgram(flags, 0, 0, full_data)
+            request = self.create_dgram(2, 0, 0, _FLAG_B)  # REQUEST
+            return request, self.create_dgram(flag, 0, 0, _DATA)
 
         # ------------------------------------------------ #
-        # DATA can be send in single batch
+        # SINGLE BATCH of DGRAMs
         elif _DATA_LEN <= self.DGRAM_SIZE * self.BATCH_SIZE:
             batch = []
-            DGRAM_COUNT = math.ceil(len(full_data) / self.DGRAM_SIZE)
+            DGRAM_COUNT = math.ceil(len(_DATA) / self.DGRAM_SIZE)
 
-            for DGRAM_NO in range(0, DGRAM_COUNT):
-                data = full_data[(DGRAM_NO * self.DGRAM_SIZE): (DGRAM_NO * self.DGRAM_SIZE + self.DGRAM_SIZE)]
-                dgram = self.create_dgram(flags, 0, DGRAM_NO, data)
+            for dgram_index in range(0, DGRAM_COUNT):
+                payload = _DATA[(dgram_index * self.DGRAM_SIZE): (dgram_index * self.DGRAM_SIZE + self.DGRAM_SIZE)]
+                dgram = self.create_dgram(flag, 0, dgram_index, payload)
                 batch.append(dgram)
 
-            info_syn = self.create_dgram(2, 0, DGRAM_COUNT - 1, flags)  # REQUEST
-            return info_syn, batch
+            request = self.create_dgram(2, 0, DGRAM_COUNT - 1, _FLAG_B)  # REQUEST
+            return request, batch
 
         # ------------------------------------------------ #
         # DATA needs to be send in multiple batches
         else:
             batch = []
-            message = []
+            list_of_batches = []
 
-            BATCH_COUNT = math.ceil((len(full_data) / self.DGRAM_SIZE) / self.BATCH_SIZE)
+            BATCH_COUNT = math.ceil((len(_DATA) / self.DGRAM_SIZE) / self.BATCH_SIZE)
 
             start = 0
             end = self.DGRAM_SIZE
@@ -114,9 +210,9 @@ class Parser:
             for BATCH_NO in range(0, BATCH_COUNT):
                 batch.clear()
 
-                for DGRAM_NO in range(0, self.BATCH_SIZE):
-                    data = full_data[start: end]
-                    dgram = self.create_dgram(flags, BATCH_NO, DGRAM_NO, data)
+                for dgram_index in range(0, self.BATCH_SIZE):
+                    payload = _DATA[start: end]
+                    dgram = self.create_dgram(flag, BATCH_NO, dgram_index, payload)
                     batch.append(dgram)
 
                     start += self.DGRAM_SIZE
@@ -125,9 +221,99 @@ class Parser:
                     if start > _DATA_LEN:
                         break
 
-                message.append(batch.copy())
+                list_of_batches.append(batch.copy())
 
-            info_syn = self.create_dgram(2, BATCH_COUNT - 1, DGRAM_NO, flags)  # REQUEST
-            return info_syn, message
+            request = self.create_dgram(2, BATCH_COUNT - 1, dgram_index, _FLAG_B)  # REQUEST
+            return request, list_of_batches
 
-    # ------------------------------------------------ #
+    # --------------- MSG HANDLING ----------------- #
+
+    def alloc_data_array(self, header):
+        """
+            TODO add docstring
+
+            args:
+
+            note:
+        """
+        last_batch_index = header[1]
+        last_dgram_index = header[2]
+
+        if last_batch_index > 0:
+            return [[b''] * self.BATCH_SIZE] * last_batch_index
+        else:
+            return [b''] * last_dgram_index
+
+    def alloc_batch_array(self):
+        return [b''] * self.BATCH_SIZE
+
+    @staticmethod
+    def process_message(full_data):
+        """
+            TODO add docstring
+
+            decode & merge message
+        """
+        if isinstance(full_data[0], list):
+            for batch in full_data:
+                for i, dgram in enumerate(batch):
+                    if isinstance(dgram, bytes):
+                        batch[i] = dgram.decode()
+        elif isinstance(full_data, list):
+            for i, dgram in enumerate(full_data):
+                if isinstance(dgram, bytes):
+                    full_data[i] = dgram.decode()
+        else:
+            full_data.decode()
+
+        return ''.join(itertools.chain(*full_data))
+
+    # --------------- NACK HANDLING ---------------- #
+    @staticmethod
+    def set_bit(n, k):
+        """
+            Set k-th bit as 1
+
+            Usage:
+                NACK is using (header)-DGRAM_NO field as indication for missing datagrams.
+
+            return:
+                updated n
+        """
+        return (1 << k) | n
+
+    @staticmethod
+    def find_indices(arr: list, condition):
+        return [i for i, elem in enumerate(arr) if condition(elem)]
+
+    def get_nack_field(self, batch: list):
+        """
+            create 1B field with indications of missing datagrams
+
+            bit set to 1 represents index of DGRAM in BATCH to resend
+
+            args:
+                indexes:list - list of
+
+            return:
+                0bxxxxxxxx
+        """
+
+        nack_field = 0b00000000
+        to_resend = self.find_indices(batch, lambda x: x is None)
+
+        for index in to_resend:
+            self.set_bit(nack_field, index)
+
+        return nack_field
+
+    def parse_nack_field(self, header):
+        """
+
+            TODO add docstring
+
+            ta ti ja viem
+        """
+        nack_field = header[2]
+
+        return self.find_indices(reversed(list(f'{nack_field:08b}')), lambda x: x == '1')

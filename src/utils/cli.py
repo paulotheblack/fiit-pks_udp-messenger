@@ -6,11 +6,10 @@ from src.sender import Sender
 class Cli:
 
     def __init__(self, sockint: Sock, parser: Parser, sender: Sender):
-        self.parser = parser
         self.sockint = sockint
         self.socket = sockint.get_socket()
+        self.parser = parser
         self.sender = sender
-        # self.listener = listener
 
     def welcome(self):
         print(
@@ -33,10 +32,10 @@ class Cli:
                 self.sender.send_syn()
 
             elif action == ':m':  # send message
-                self.sender.send_message()
+                self.sender.send_data()
 
             elif action == ':f':  # send file
-                pass
+                self.sender.send_data(file=True)
 
             elif action == ':d':  # drop connection [do not send keep-alive]
                 pass
@@ -50,4 +49,4 @@ class Cli:
                 print('Auf viedersehen!')
                 exit(0)
             else:
-                print('! Unknown action, please try again')
+                print('$ Unknown action, please try again')

@@ -4,7 +4,13 @@ from threading import Thread
 
 
 class Sender(Thread):
-    dest_addr = None  # Tuple[str, int]
+    DEST_ADDR: tuple = None
+
+    # ARQ + ERR handling flags
+    GOT_ACK: bool = None
+    GOT_NACK: bool = None
+    # Indexes to resend
+    TO_RESEND: list = None
 
     def __init__(self, sock: Sock, parser: Parser):
         Thread.__init__(self, name='Sender', daemon=True)
@@ -13,54 +19,128 @@ class Sender(Thread):
         self.parser = parser
 
     def send(self, dgram):
-        self.socket.sendto(dgram, self.dest_addr)
+        self.socket.sendto(dgram, self.DEST_ADDR)
 
-    # ------------------------------------------------ #
-    # two-way handshake
-
+    # -------------------  HANDSHAKE ------------------------- #
     def send_syn(self):
-        dest_addr = input('> connect to (IP): ')
-        dest_port = input('> at port: ')
-        self.dest_addr = (dest_addr, int(dest_port))
-
-        flag = 0
-        dgram = self.parser.create_dgram(flag, 0, 0, '')
+        dest_addr = input('$ Connect to (IP): ')
+        dest_port = input('$ At port: ')
+        self.DEST_ADDR = (dest_addr, int(dest_port))
+        dgram = self.parser.create_dgram(0, 0, 0, b'')
         self.send(dgram)
+
+        while self.GOT_ACK is False:
+            # TODO implement KEEP_ALIVE
+            pass
+        print('[log] Connection established')
+        # Reset flag
+        self.GOT_ACK = False
 
     def send_ack(self):
-        flag = 1
-        dgram = self.parser.create_dgram(flag, 0, 0, '')
+        dgram = self.parser.create_dgram(1, 0, 0, b'')
         self.send(dgram)
 
-    # ------------------------------------------------ #
-    #   MSG
+    # -------------------  ACKs/NACK ------------------------- #
+    def send_ack_msg(self, batch_no):
+        dgram = self.parser.create_dgram(5, batch_no, 0, b'')
+        self.send(dgram)
 
-    def send_message(self):
-        data = input('# ')
+    def send_ack_file(self, batch_no):
+        dgram = self.parser.create_dgram(6, batch_no, 0, b'')
+        self.send(dgram)
 
-        info_syn, batch_list = self.parser.create_batch(3, data)
-        self.send(info_syn)
+    def send_nack(self, batch):
+        nack_field = self.parser.get_nack_field(batch)
+        dgram = self.parser.create_dgram(7, 0, nack_field, b'')
+        self.send(dgram)
 
-        # msg in multiple batches
-        if isinstance(batch_list[0], list):
-            for batch in batch_list:
-                for dgram in batch:
-                    self.send(dgram)
-                # TODO waiting for ACK before another batch
+    # ---------------------  DATA ---------------------------- #
+    def send_data(self, file=False):
+        """
+            Send data from user
 
-        # msg in single batch
-        elif isinstance(batch_list, list):
+            args:
+                file: if data type is File (default=False)
+
+            Runtime:
+                1. ask for input (if message)
+                2. parse data
+                3. send REQUEST
+                4. send message
+                if single datagram:
+                    not waiting for ACK
+                if single batch:
+                    waiting for ACK in case of retransmission
+                if bunch of batches:
+                    waiting for ACK after each batch in case of retransmission
+
+            return: void
+        """
+
+        if file:
+            print('$ Provide absolute path to file')
+            path = input('$ ')
+            data = self.parser.get_file(path)
+        else:
+            data = input('# ')
+
+        request, batch_list = self.parser.create_batch(3, data)
+        self.send(request)
+
+        # -  SINGLE DATAGRAM --------------------------------------------------- #
+        if isinstance(batch_list, bytes):
+            self.send(batch_list)
+
+            # do not send next batch until MSG_ACK or NACK received
+            while self.GOT_ACK is False or self.GOT_NACK is False:
+                pass
+            if self.GOT_NACK:
+                self.retransmission(batch_list)
+
+            # Reset flag
+            self.GOT_ACK = False
+
+        # - SINGLE BATCH ------------------------------------------------------- #
+        elif isinstance(batch_list[0], bytes):
             for dgram in batch_list:
                 self.send(dgram)
 
-        # msg in single dgram
-        elif isinstance(batch_list, bytes):
-            self.send(batch_list)
+            # do not send next batch until MSG_ACK or NACK received
+            while self.GOT_ACK is False or self.GOT_NACK is False:
+                pass
+            if self.GOT_NACK:
+                self.retransmission(batch_list)
 
+            # Reset flag
+            self.GOT_ACK = False
+
+        # - MULTIPLE BATCHES --------------------------------------------------- #
+        elif isinstance(batch_list[0], list):
+            for i, batch in enumerate(batch_list):
+                self.GOT_ACK = False
+
+                for dgram in batch:
+                    self.send(dgram)
+
+                # do not send next batch until MSG_ACK or NACK received
+                while self.GOT_ACK is False or self.GOT_NACK is False:
+                    pass
+                if self.GOT_NACK:
+                    self.retransmission(batch)
+
+                # Reset flag
+                self.GOT_ACK = False
+
+        # STDERR
         else:
-            print('Unknown type ', type(batch_list))
-            print(batch_list)
+            print(f'[TYPE ERR]: {type(batch_list)}\n {batch_list}')
 
-    def send_msg_ack(self, batch_no):
-        dgram = self.parser.create_dgram(5, batch_no, 0, '')
-        self.send(dgram)
+    def retransmission(self, batch: list):
+        for i, dgram in enumerate(batch):
+            if i in self.TO_RESEND:
+                self.send(dgram)
+
+        while self.GOT_ACK is False or self.GOT_NACK is False:
+            pass
+        if self.GOT_NACK:  # OR KEEP_ALIVE
+            self.retransmission(batch)

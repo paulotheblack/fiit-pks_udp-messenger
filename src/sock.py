@@ -11,6 +11,15 @@ class Sock:
         self.create_socket(ip, port)
 
     def create_socket(self, address, port):
+        """
+            create and bind socket (UDP)
+
+            args:
+                address: str    IP_ADDRESS (IPv4)
+                port: int       PORT
+
+            return: void
+        """
         self.local_ip = address
         self.local_port = int(port)
         self.local_address = (self.local_ip, self.local_port)
