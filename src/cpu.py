@@ -32,9 +32,9 @@ class Cpu:
         self.sender.DEST_ADDR = source_address
         self.sender.send_ack()
         # debug
-        print(f'\n[SYN] {source_address[0]}:{source_address[1]}')
+        print(f'[SYN] {source_address[0]}:{source_address[1]}')
 
-    def recv_ack(self, source_address):
+    def recv_ack(self, source_address: tuple):
         self.SRC_ADDR = source_address
         self.sender.GOT_ACK = True
         # debug

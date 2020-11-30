@@ -57,10 +57,9 @@ class Parser:
     def get_info(self):
         print(
             f'-----------------------\n'
-            f'|>  HEADER_SIZE: {self.HEADER_SIZE}\n'
-            f'|>  DGRAM_SIZE: {self.DGRAM_SIZE}\n'
-            f'|>  BATCH_SIZE: {self.BATCH_SIZE}\n'
-            f'-----------------------'
+            f'$ HEADER_SIZE: {self.HEADER_SIZE}\n'
+            f'$ DGRAM_SIZE: {self.DGRAM_SIZE}\n'
+            f'$ BATCH_SIZE: {self.BATCH_SIZE}'
         )
 
     def set_dgram_size(self):
@@ -69,13 +68,13 @@ class Parser:
 
             Value can be only between 1 and 1500
         """
-        desired_size = int(input('$ Desired DGRAM_SIZE in B (min. 1): '))
+        desired_size = int(input('$ Set DGRAM_SIZE to (in B): '))
 
         while desired_size < 1 or desired_size > 1500:
             desired_size = int(input('! Incorrect DGRAM_SIZE\n$ in B (min. 1, max.1500): '))
 
         self.DGRAM_SIZE = desired_size
-        print(f'$ DGRAM_SIZE set to: {self.DGRAM_SIZE}')
+        print(f'$ DGRAM_SIZE set to: {self.DGRAM_SIZE}B')
 
     # DONE
     @staticmethod
@@ -259,6 +258,7 @@ class Parser:
                 for i, dgram in enumerate(batch):
                     if isinstance(dgram, bytes):
                         batch[i] = dgram.decode()
+
         elif isinstance(full_data, list):
             for i, dgram in enumerate(full_data):
                 if isinstance(dgram, bytes):

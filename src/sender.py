@@ -78,13 +78,15 @@ class Sender(Thread):
         """
 
         if file:
+            flag = 3
             print('$ Provide absolute path to file')
             path = input('$ ')
             data = self.parser.get_file(path)
         else:
+            flag = 4
             data = input('# ')
 
-        request, batch_list = self.parser.create_batch(3, data)
+        request, batch_list = self.parser.create_batch(flag, data)
         self.send(request)
 
         # -  SINGLE DATAGRAM --------------------------------------------------- #
