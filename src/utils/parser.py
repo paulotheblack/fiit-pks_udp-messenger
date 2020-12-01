@@ -284,7 +284,7 @@ class Parser:
                 f.close()
 
         except IOError:
-            print(IOError)
+            print(IOError.strerror + '' + IOError.errno)
             print(f'$ Unable to write file: {"".join([path, name])}')
 
     # --------------- NACK HANDLING ---------------- #
