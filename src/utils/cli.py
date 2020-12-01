@@ -14,12 +14,12 @@ class Cli:
     def welcome(self):
         print(
             f'\t\tWelcome!\n'
-            f'type ":c" to establish connection\n'
-            f'type ":m" to send message\n'
-            f'type ":f" to send file\n'
-            f'type ":s" to change settings\n'
-            f'type ":q" to exit program\n'
-            f'Your address is set to: {self.socket.getsockname()}\n'
+            f'":c" to establish connection\n'
+            f'":m" to send message\n'
+            f'":f" to send file\n'
+            f'":s" to change settings\n'
+            f'":q" to exit program\n'
+            f'Your address is set to: {self.socket.getsockname()[0]}:{self.socket.getsockname()[1]}\n'
         )
 
     def stdin(self):

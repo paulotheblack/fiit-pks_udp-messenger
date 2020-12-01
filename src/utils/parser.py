@@ -58,6 +58,7 @@ class Parser:
         self.VARS = vars(args)
         return vars(args)
 
+    # DONE
     def get_args(self):
         return self.VARS
 
@@ -66,22 +67,21 @@ class Parser:
         """
             User defined DATAGRAM size (in B)
 
-            Value can be only between 1 and 1500
+            Value can be only between 1 and 1440
         """
         print(
-            f'-----------------------\n'
-            f'$ HEADER_SIZE: {self.HEADER_SIZE}\n'
-            f'$ DGRAM_SIZE: {self.DGRAM_SIZE}\n'
-            f'$ BATCH_SIZE: {self.BATCH_SIZE}'
+            f'HEADER_SIZE: {self.HEADER_SIZE}\n'
+            f'DGRAM_SIZE: {self.DGRAM_SIZE}\n'
+            f'BATCH_SIZE: {self.BATCH_SIZE}'
         )
 
-        desired_size = int(input('$ Set DGRAM_SIZE to (in B): '))
+        desired_size = int(input('> SET DGRAM_SIZE to (in B): '))
 
         while desired_size < 1 or desired_size > 1450:
-            desired_size = int(input('! Incorrect DGRAM_SIZE\n$ in B (min. 1, max.1450): '))
+            desired_size = int(input('! Incorrect DGRAM_SIZE\n> in B (min. 1, max.1440): '))
 
         self.DGRAM_SIZE = desired_size
-        print(f'$ DGRAM_SIZE set to: {self.DGRAM_SIZE}B')
+        print(f'{c.RED}[log] NEW DGRAM_SIZE = {self.DGRAM_SIZE}B{c.END}')
 
     # DONE
     @staticmethod
@@ -117,6 +117,7 @@ class Parser:
         else:
             return False
 
+    # DONE
     @staticmethod
     def get_file(path: str):
         try:
@@ -125,10 +126,20 @@ class Parser:
                 data = posix_path.read_bytes()
                 return data, posix_path.name
         except IOError:
-            print('$ Unable to read file')
+            print(f'{c.RED}> Unable to read file{c.END}')
             return None, None
 
+    # DONE
     def write_file(self, path: str, name: str, data):
+        """
+            TODO add doc string
+
+            args
+
+            return:
+                size_readable   / None
+                posix_path      / None
+        """
         try:
             with open("".join([path, name]), 'wb') as f:
                 # size = len(data)
@@ -150,12 +161,13 @@ class Parser:
                 posix_path = p.Path("".join([path, name]))
                 size = posix_path.stat().st_size
                 size_readable = self.convert_size(size)
-                print(f'{c.DARKCYAN}[FILE]({size_readable}) {c.RED + c.BOLD}"{posix_path}"{c.END}')
+                return posix_path, size_readable
 
         except IOError:
             print(IOError.strerror + '' + IOError.errno)
-            print(f'$ Unable to write file: {"".join([path, name])}')
+            return None, None
 
+    # DONE
     @staticmethod
     def convert_size(num):
         """
@@ -252,7 +264,7 @@ class Parser:
         # DATA needs to be send in multiple batches
         else:
             if flag == 4:
-                print('[log] Parsing file... ', end='')
+                print(f'{c.RED + "[log]" + c.END} Parsing file... ', end='')
 
             batch = []
             list_of_batches = []
@@ -281,7 +293,7 @@ class Parser:
             request = self.create_dgram(2, BATCH_COUNT - 1, dgram_index, _FLAG_B)  # REQUEST
 
             if flag == 4:
-                print('DONE!')
+                print(f'{c.RED}DONE!{c.END}')
 
             return request, list_of_batches
 

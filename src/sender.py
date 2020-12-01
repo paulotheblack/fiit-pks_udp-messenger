@@ -1,6 +1,7 @@
 from src.sock import Sock
 from src.utils.parser import Parser
 from threading import Thread
+import src.utils.color as c
 
 
 class Sender(Thread):
@@ -8,6 +9,7 @@ class Sender(Thread):
 
     # ARQ + ERR handling flags
     GOT_ACK: bool = None
+    ACK_NO: int = None
     GOT_NACK: bool = None
     # Indexes to resend
     TO_RESEND: list = None
@@ -23,8 +25,8 @@ class Sender(Thread):
 
     # -------------------  HANDSHAKE ------------------------- #
     def send_syn(self):
-        dest_addr = input('$ Connect to (IP): ')
-        dest_port = input('$ At port: ')
+        dest_addr = input('> Connect to (IP): ')
+        dest_port = input('> At port: ')
         self.DEST_ADDR = (dest_addr, int(dest_port))
         dgram = self.parser.create_dgram(0, 0, 0, b'')
         self.send(dgram)
@@ -32,7 +34,7 @@ class Sender(Thread):
         while self.GOT_ACK is False:
             # TODO implement KEEP_ALIVE
             pass
-        print('[log] Connection established')
+
         # Reset flag
         self.GOT_ACK = False
 
@@ -60,7 +62,7 @@ class Sender(Thread):
             data = False
             while not data:
                 flag = 4
-                path = input('$ Provide absolute path to file\n$ ')
+                path = input('> Provide absolute path to file\n# ')
                 if path == ':q':
                     return
 
@@ -152,13 +154,13 @@ class Sender(Thread):
 
                 # Reset flag
                 self.GOT_ACK = False
+
+            if flag == 4 and self.ACK_NO == i:
+                print(f'{c.RED}[log]{c.GREEN} File received!')
+
         # STDERR
         else:
             print(f'[TYPE ERR]: {type(batch_list)}\n {batch_list}')
-
-        # Reset flag
-        if flag == 4:
-            print(f'[log] File received!')
 
     def retransmission(self, batch: list):
         for i, dgram in enumerate(batch):

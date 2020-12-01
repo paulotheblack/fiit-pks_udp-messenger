@@ -6,17 +6,6 @@ from src.cpu import Cpu
 
 
 class Listener(Thread):
-    source_address: tuple = None
-
-    CURRENT_BATCH = None
-    CURRENT_DGRAM = None
-
-    LAST_BATCH_INDEX = None
-    LAST_DGRAM_INDEX = None
-    IS_FILE = False
-
-    BATCH: list
-    DATA = ''
 
     def __init__(self, socket: Sock, parser: Parser, cpu: Cpu):
         Thread.__init__(self, name='Listener', daemon=True)
@@ -47,7 +36,7 @@ class Listener(Thread):
                 self.cpu.recv_data(header, data)
 
             elif header[0] == 5:  # ACK_MSG
-                self.cpu.recv_ack_msg(header)
+                self.cpu.recv_ack_msg()
 
             elif header[0] == 6:  # ACK_FILE
                 self.cpu.recv_ack_file(header)

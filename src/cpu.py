@@ -32,14 +32,13 @@ class Cpu:
         self.SRC_ADDR = source_address
         self.sender.DEST_ADDR = source_address
         self.sender.send_ack()
-        # debug
-        print(f'[SYN] {source_address[0]}:{source_address[1]}')
+        print(f'{c.RED + "[log]" + c.END} Connection request from {c.DARKCYAN}{source_address[0]}:{source_address[1]}{c.END}')
 
     def recv_ack(self, source_address: tuple):
         self.SRC_ADDR = source_address
         self.sender.GOT_ACK = True
-        # debug
-        # print(f'[ACK] {self.SRC_ADDR[0]}:{self.SRC_ADDR[1]}')
+
+        print(f'{c.RED + "[log]" + c.END} Connection with {c.DARKCYAN}{self.SRC_ADDR[0]}{c.END} established!')
 
     # -------------------  ACKs/NACK ------------------------- #
     def recv_request(self, header, data):
@@ -67,28 +66,23 @@ class Cpu:
         # FILE REQ
         if data_type == '4':
             self.IS_FILE = True
-            print(f'{c.DARKCYAN}[{self.SRC_ADDR[1]}] {c.RED + c.BOLD} Sending file: "{self.FILE_NAME}"{c.END}')
+            print(f'{c.DARKCYAN}[{self.SRC_ADDR[0]}]{c.RED + c.BOLD} is sending file "{self.FILE_NAME}"{c.END}')
 
         # MSG REQ
         else:
             self.IS_FILE = False
 
         # debug
-        print(f'[REQ {data_type}] last_batch: {self.LAST_BATCH_INDEX}, '
-              f'last_dgram: {self.LAST_DGRAM_INDEX}, '
-              f'is_file: {self.IS_FILE}')
+        # print(f'[REQ {data_type}] last_batch: {self.LAST_BATCH_INDEX}, '
+        #       f'last_dgram: {self.LAST_DGRAM_INDEX}, '
+        #       f'is_file: {self.IS_FILE}')
 
-    def recv_ack_msg(self, header):
+    def recv_ack_msg(self):
         self.sender.GOT_ACK = True
-
-        # debug
-        # print(f'[ACK_MSG] {header[1]}')
 
     def recv_ack_file(self, header):
         self.sender.GOT_ACK = True
-
-        # debug
-        # print(f'[ACK_FILE] {header[1]}')
+        self.sender.ACK_NO = header[1]
 
     # TODO maybe change logic of NACK
     def recv_nack(self, header):
@@ -126,20 +120,26 @@ class Cpu:
                     # send ACK-FILE
                     self.sender.send_ack_file(self.CURR_BATCH_INDEX)
                     # save file
-                    self.pars.write_file(self.FILE_PATH, self.FILE_NAME, data)
-                    pass
+                    path, size = self.pars.write_file(self.FILE_PATH, self.FILE_NAME, data)
+
+                    if size:
+                        print(f'{c.DARKCYAN}[FILE]({size}) {c.RED + c.BOLD}"{path}"{c.END}')
+                    else:
+                        print(f'> Unable to save file to: {self.FILE_PATH}')
+
                 # if file name
                 elif file_name:
                     # send ACK
                     self.sender.send_ack_msg(self.CURR_BATCH_INDEX)
                     # assign FILE_NAME
                     self.FILE_NAME = data.decode()
+
                 # if message
                 else:
                     # send ACK
                     self.sender.send_ack_msg(self.CURR_BATCH_INDEX)
                     # CHAT PRINT
-                    print(f'{c.DARKCYAN}[{self.SRC_ADDR[1]}]{c.END}({len(data)}B) {c.YELLOW + data.decode() + c.END}')
+                    print(f'{c.DARKCYAN}[{self.SRC_ADDR[0]}]{c.END}({len(data)}B) {c.YELLOW + data.decode() + c.END}')
 
             # - SINGLE BATCH ------------------------------------------------------- #
             elif self.LAST_BATCH_INDEX == 0:
@@ -155,7 +155,11 @@ class Cpu:
                             # send ACK-FILE
                             self.sender.send_ack_file(self.CURR_BATCH_INDEX)
                             # save file
-                            self.pars.write_file(self.FILE_PATH, self.FILE_NAME, self.BATCH)
+                            path, size = self.pars.write_file(self.FILE_PATH, self.FILE_NAME, self.BATCH)
+                            if size:
+                                print(f'{c.DARKCYAN}[FILE]({size}) {c.RED + c.BOLD}"{path}"{c.END}')
+                            else:
+                                print(f'> Unable to save file to: {self.FILE_PATH}')
 
                         # if file name
                         elif file_name:
@@ -173,7 +177,7 @@ class Cpu:
                             # merge message
                             msg = self.pars.process_message(self.BATCH)
                             # CHAT PRINT
-                            print(f'{c.DARKCYAN}[{self.SRC_ADDR[1]}]{c.END}({len(msg)}B) {c.YELLOW + msg + c.END}')
+                            print(f'{c.DARKCYAN}[{self.SRC_ADDR[0]}]{c.END}({len(msg)}B) {c.YELLOW + msg + c.END}')
                     else:
                         self.sender.send_nack(self.BATCH)
 
@@ -221,7 +225,12 @@ class Cpu:
                             # append FULL_DATA with last/current BATCH
                             self.FULL_DATA.append(self.BATCH.copy())
                             # save file
-                            self.pars.write_file(self.FILE_PATH, self.FILE_NAME, self.FULL_DATA)
+                            path, size = self.pars.write_file(self.FILE_PATH, self.FILE_NAME, self.FULL_DATA)
+
+                            if size:
+                                print(f'{c.DARKCYAN}[FILE]({size}) {c.RED + c.BOLD}"{path}"{c.END}')
+                            else:
+                                print(f'> Unable to save file to: {self.FILE_PATH}')
 
                         # if file name
                         elif file_name:
@@ -243,10 +252,12 @@ class Cpu:
                             # merge message
                             msg = self.pars.process_message(self.FULL_DATA)
                             # CHAT PRINT
-                            print(f'{c.DARKCYAN}[{self.SRC_ADDR[1]}]{c.END}({len(msg)}B) {c.YELLOW + msg + c.END}')
+                            print(f'{c.DARKCYAN}[{self.SRC_ADDR[0]}]{c.END}({len(msg)}B) {c.YELLOW + msg + c.END}')
                     else:
                         # send NACK
                         self.sender.send_nack(self.BATCH)
 
         else:
             self.BATCH.insert(self.CURR_DGRAM_INDEX, None)
+
+    # ---------------------- TTL ---------------------------- #
