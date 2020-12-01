@@ -32,10 +32,10 @@ class Cli:
                 self.sender.send_syn()
 
             elif action == ':m':  # send message
-                self.sender.send_data()
+                self.sender.input_data()
 
             elif action == ':f':  # send file
-                self.sender.send_data(file=True)
+                self.sender.input_data(file=True)
 
             elif action == ':d':  # drop connection [do not send keep-alive]
                 pass

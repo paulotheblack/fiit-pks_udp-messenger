@@ -55,7 +55,32 @@ class Sender(Thread):
         self.send(dgram)
 
     # ---------------------  DATA ---------------------------- #
-    def send_data(self, file=False):
+    def input_data(self, file=False):
+        if file:
+            data = False
+            while not data:
+                flag = 4
+                path = input('$ Provide absolute path to file\n$ ')
+                if path == ':q':
+                    return
+
+                data, file_name = self.parser.get_file(path)
+
+                if not data:
+                    return
+
+                # send file_name
+                self.send_data(flag=9, data=file_name)
+                # send_file
+                self.send_data(flag, data)
+
+        else:
+            flag = 3
+            data = input('# ')
+            # send_message
+            self.send_data(flag, data)
+
+    def send_data(self, flag, data):
         """
             Send data from user
 
@@ -63,10 +88,9 @@ class Sender(Thread):
                 file: if data type is File (default=False)
 
             Runtime:
-                1. ask for input (if message)
-                2. parse data
-                3. send REQUEST
-                4. send message
+                1. parse data
+                2. send REQUEST
+                3. send message
                 if single datagram:
                     not waiting for ACK
                 if single batch:
@@ -76,16 +100,6 @@ class Sender(Thread):
 
             return: void
         """
-        if file:
-            data = False
-            while not data:
-                flag = 4
-                print('$ Provide absolute path to file')
-                path = input('$ ')
-                data = self.parser.get_file(path)
-        else:
-            flag = 3
-            data = input('# ')
 
         request, batch_list = self.parser.create_batch(flag, data)
         self.send(request)
@@ -98,6 +112,7 @@ class Sender(Thread):
             while self.GOT_ACK is False or self.GOT_NACK is False:
                 pass
             if self.GOT_NACK:
+                print('GOT NACK')
                 self.retransmission(batch_list)
 
             # Reset flag
@@ -112,6 +127,7 @@ class Sender(Thread):
             while self.GOT_ACK is False or self.GOT_NACK is False:
                 pass
             if self.GOT_NACK:
+                print('GOT NACK')
                 self.retransmission(batch_list)
 
             # Reset flag
@@ -129,14 +145,18 @@ class Sender(Thread):
                 while self.GOT_ACK is False or self.GOT_NACK is False:
                     pass
                 if self.GOT_NACK:
+                    print('GOT NACK')
                     self.retransmission(batch)
 
                 # Reset flag
                 self.GOT_ACK = False
-
         # STDERR
         else:
             print(f'[TYPE ERR]: {type(batch_list)}\n {batch_list}')
+
+        # Reset flag
+        if flag == 4:
+            print(f'[log] File received!')
 
     def retransmission(self, batch: list):
         for i, dgram in enumerate(batch):

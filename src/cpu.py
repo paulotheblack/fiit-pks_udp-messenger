@@ -39,7 +39,7 @@ class Cpu:
         self.SRC_ADDR = source_address
         self.sender.GOT_ACK = True
         # debug
-        print(f'[ACK] {self.SRC_ADDR[0]}:{self.SRC_ADDR[1]}')
+        # print(f'[ACK] {self.SRC_ADDR[0]}:{self.SRC_ADDR[1]}')
 
     # -------------------  ACKs/NACK ------------------------- #
     def recv_request(self, header, data):
@@ -62,17 +62,19 @@ class Cpu:
 
         self.BATCH = self.pars.alloc_batch_array()
 
-        # If file, ask user for PATH to save it
-        if data.decode() == '4':
+        data_type = data.decode()
+
+        # FILE REQ
+        if data_type == '4':
             self.IS_FILE = True
-            print(f'{c.RED}[{self.SRC_ADDR[1]}] Would like to send you file{c.END}')
-            print(f'$ Path to save file is set to: {c.BOLD + c.RED + self.FILE_PATH + c.END}')
-            # self.FILE_PATH = input('$ Absolute path to save file: ')
+            print(f'[{self.SRC_ADDR[1]}] {c.RED + c.BOLD} Would like to send you file{c.END}')
+
+        # MSG REQ
         else:
             self.IS_FILE = False
 
         # debug
-        print(f'[REQ] last_batch: {self.LAST_BATCH_INDEX}, '
+        print(f'[REQ {data_type}] last_batch: {self.LAST_BATCH_INDEX}, '
               f'last_dgram: {self.LAST_DGRAM_INDEX}, '
               f'is_file: {self.IS_FILE}')
 
@@ -80,13 +82,13 @@ class Cpu:
         self.sender.GOT_ACK = True
 
         # debug
-        print(f'[ACK_MSG] {header[1]}')
+        # print(f'[ACK_MSG] {header[1]}')
 
     def recv_ack_file(self, header):
         self.sender.GOT_ACK = True
 
         # debug
-        print(f'[ACK_FILE] {header[1]}')
+        # print(f'[ACK_FILE] {header[1]}')
 
     # TODO maybe change logic of NACK
     def recv_nack(self, header):
@@ -101,7 +103,7 @@ class Cpu:
         print(f'[NACK] {self.sender.TO_RESEND}')
 
     # ---------------------  DATA ---------------------------- #
-    def recv_data(self, header, data: bytearray):
+    def recv_data(self, header, data: bytearray, file_name=False):
         """
             TODO add docstring
 
@@ -114,8 +116,6 @@ class Cpu:
         self.CURR_BATCH_INDEX = header[1]
         self.CURR_DGRAM_INDEX = header[2]
 
-        # TODO FILE_NAME handling
-
         # Checksum is correct
         if self.pars.check_checksum(header, data):
 
@@ -126,14 +126,20 @@ class Cpu:
                     # send ACK-FILE
                     self.sender.send_ack_file(self.CURR_BATCH_INDEX)
                     # save file
-                    self.pars.write_file(self.FILE_PATH, 'test.jpg', data)
+                    self.pars.write_file(self.FILE_PATH, self.FILE_NAME, data)
                     pass
+                # if file name
+                elif file_name:
+                    # send ACK
+                    self.sender.send_ack_msg(self.CURR_BATCH_INDEX)
+                    # assign FILE_NAME
+                    self.FILE_NAME = data.decode()
                 # if message
                 else:
                     # send ACK
                     self.sender.send_ack_msg(self.CURR_BATCH_INDEX)
                     # CHAT PRINT
-                    print(f'[{self.SRC_ADDR[1]}]({len(data)}B) {c.YELLOW + data.decode() + c.END}')
+                    print(f'[{self.SRC_ADDR[1]}]({len(data)} B) {c.YELLOW + data.decode() + c.END}')
 
             # - SINGLE BATCH ------------------------------------------------------- #
             elif self.LAST_BATCH_INDEX == 0:
@@ -149,7 +155,17 @@ class Cpu:
                             # send ACK-FILE
                             self.sender.send_ack_file(self.CURR_BATCH_INDEX)
                             # save file
-                            self.pars.write_file(self.FILE_PATH, 'test.jpg', self.BATCH)
+                            self.pars.write_file(self.FILE_PATH, self.FILE_NAME, self.BATCH)
+
+                        # if file name
+                        elif file_name:
+                            # send ACK
+                            self.sender.send_ack_msg(self.CURR_BATCH_INDEX)
+                            # merge message
+                            msg = self.pars.process_message(self.BATCH)
+                            # assign FILE_NAME
+                            self.FILE_NAME = msg
+
                         # if message
                         else:
                             # send ACK
@@ -157,7 +173,7 @@ class Cpu:
                             # merge message
                             msg = self.pars.process_message(self.BATCH)
                             # CHAT PRINT
-                            print(f'[{self.SRC_ADDR[1]}]({len(msg)}B) {c.YELLOW + msg + c.END}')
+                            print(f'[{self.SRC_ADDR[1]}]({len(msg)} B) {c.YELLOW + msg + c.END}')
                     else:
                         self.sender.send_nack(self.BATCH)
 
@@ -174,6 +190,12 @@ class Cpu:
                         if self.IS_FILE:
                             # send ACK-FILE
                             self.sender.send_ack_file(self.CURR_BATCH_INDEX)
+
+                        # if file name
+                        elif file_name:
+                            # send ACK
+                            self.sender.send_ack_msg(self.CURR_BATCH_INDEX)
+
                         # if message
                         else:
                             # send ACK-MSG
@@ -199,7 +221,19 @@ class Cpu:
                             # append FULL_DATA with last/current BATCH
                             self.FULL_DATA.append(self.BATCH.copy())
                             # save file
-                            self.pars.write_file(self.FILE_PATH, 'test.jpg', self.FULL_DATA)
+                            self.pars.write_file(self.FILE_PATH, self.FILE_NAME, self.FULL_DATA)
+
+                        # if file name
+                        elif file_name:
+                            # send ACK
+                            self.sender.send_ack_msg(self.CURR_BATCH_INDEX)
+                            # append FULL_DATA with last/current BATCH
+                            self.FULL_DATA.append(self.BATCH.copy())
+                            # merge message
+                            msg = self.pars.process_message(self.FULL_DATA)
+                            # assign FILE_NAME
+                            self.FILE_NAME = msg
+
                         # if message
                         else:
                             # send ACK-MSG
@@ -209,7 +243,7 @@ class Cpu:
                             # merge message
                             msg = self.pars.process_message(self.FULL_DATA)
                             # CHAT PRINT
-                            print(f'[{self.SRC_ADDR[1]}]({len(msg)}B) {c.YELLOW + msg + c.END}')
+                            print(f'[{self.SRC_ADDR[1]}]({len(msg)} B) {c.YELLOW + msg + c.END}')
                     else:
                         # send NACK
                         self.sender.send_nack(self.BATCH)

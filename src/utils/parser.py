@@ -3,6 +3,7 @@ import struct
 import argparse
 import textwrap
 import itertools
+import pathlib as p
 
 """
 custom header: 8B
@@ -28,7 +29,7 @@ _FLAGS:
 
 class Parser:
     HEADER_SIZE = 8
-    DGRAM_SIZE = 158 - HEADER_SIZE  # MAX SIZE 1492
+    DGRAM_SIZE = 1450 - HEADER_SIZE  # MAX SIZE 1450
     BATCH_SIZE = 8  # MAX 8
 
     VARS = None
@@ -120,13 +121,52 @@ class Parser:
     @staticmethod
     def get_file(path: str):
         try:
-            with open(path, 'rb') as f:
-                data = f.read(-1)
-                f.close()
-                return data
+            posix_path = p.Path(path)
+            with posix_path.open(mode='r') as f:
+                data = posix_path.read_bytes()
+                return data, posix_path.name
         except IOError:
             print('$ Unable to read file')
-            return False
+            return None, None
+
+    # ?
+    def write_file(self, path: str, name: str, data):
+        try:
+            with open("".join([path, name]), 'wb') as f:
+                # size = len(data)
+                # size_readable = self.convert_size(len(data))
+
+                if isinstance(data[0], list):
+                    for batch in data:
+                        for dgram in batch:
+                            f.write(dgram)
+
+                elif isinstance(data, list):
+                    for dgram in data:
+                        f.write(dgram)
+                else:
+                    f.write(data)
+
+                f.close()
+
+                posix_path = p.Path("".join([path, name]))
+                size = posix_path.stat().st_size
+                size_readable = self.convert_size(size)
+                print(f'[FILE]({size_readable}) "{posix_path}"')
+
+        except IOError:
+            print(IOError.strerror + '' + IOError.errno)
+            print(f'$ Unable to write file: {"".join([path, name])}')
+
+    @staticmethod
+    def convert_size(num):
+        """
+            source: https://stackoverflow.com/a/39988702
+        """
+        for x in ['B', 'KB', 'MB', 'GB', 'TB']:
+            if num < 1024.0:
+                return "%3.1f %s" % (num, x)
+            num /= 1024.0
 
     # ------------ DGRAM DECOMPOSITION -------------- #
     # DONE
@@ -138,7 +178,7 @@ class Parser:
         return dgram[self.HEADER_SIZE:]
 
     # ------------- DGRAM COMPOSITION --------------- #
-
+    # DONE
     def create_dgram(self, flag, batch_no, dgram_no, data: bytearray):
         """
             TODO add docstring
@@ -165,6 +205,7 @@ class Parser:
         HEADER = struct.pack('!B I B H', flag, batch_no, dgram_no, CRC)
         return HEADER + data
 
+    # DONE
     def create_batch(self, flag, full_data):
         """
             Parse input data to batches of datagrams
@@ -182,7 +223,7 @@ class Parser:
 
         """
         # if message, need to encode
-        if flag == 3:
+        if flag == 3 or flag == 9:
             _DATA = full_data.encode()
         else:
             _DATA = full_data
@@ -212,6 +253,9 @@ class Parser:
         # ------------------------------------------------ #
         # DATA needs to be send in multiple batches
         else:
+            if flag == 4:
+                print('[log] Parsing file... ', end='')
+
             batch = []
             list_of_batches = []
 
@@ -237,12 +281,18 @@ class Parser:
                 list_of_batches.append(batch.copy())
 
             request = self.create_dgram(2, BATCH_COUNT - 1, dgram_index, _FLAG_B)  # REQUEST
+
+            if flag == 4:
+                print('DONE!')
+
             return request, list_of_batches
 
     # --------------- MSG HANDLING ----------------- #
+    # DONE
     def alloc_batch_array(self):
         return [b''] * self.BATCH_SIZE
 
+    # DONE
     @staticmethod
     def process_message(full_data):
         """
@@ -265,29 +315,8 @@ class Parser:
 
         return ''.join(itertools.chain(*full_data))
 
-    @staticmethod
-    def write_file(path: str, name: str, data):
-        try:
-            with open("".join([path, name]), 'wb') as f:
-                if isinstance(data[0], list):
-                    for batch in data:
-                        for dgram in batch:
-                            f.write(dgram)
-
-                elif isinstance(data, list):
-                    for dgram in data:
-                        f.write(dgram)
-                else:
-                    f.write(data)
-
-                print(f'File saved: "{"".join([path, name])}"')
-                f.close()
-
-        except IOError:
-            print(IOError.strerror + '' + IOError.errno)
-            print(f'$ Unable to write file: {"".join([path, name])}')
-
     # --------------- NACK HANDLING ---------------- #
+    # DONE
     @staticmethod
     def set_bit(n, k):
         """
@@ -301,10 +330,12 @@ class Parser:
         """
         return (1 << k) | n
 
+    # DONE
     @staticmethod
     def find_indices(arr: list, condition):
         return [i for i, elem in enumerate(arr) if condition(elem)]
 
+    # DONE
     def get_nack_field(self, batch: list):
         """
             create 1B field with indications of missing datagrams
@@ -326,6 +357,7 @@ class Parser:
 
         return nack_field
 
+    # DONE
     def parse_nack_field(self, header):
         """
 
