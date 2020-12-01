@@ -31,10 +31,11 @@ class Parser:
     DGRAM_SIZE = 158 - HEADER_SIZE  # MAX SIZE 1492
     BATCH_SIZE = 8  # MAX 8
 
+    VARS = None
+
     # ------------------ UTILS --------------------- #
     # DONE
-    @staticmethod
-    def parse_args():
+    def parse_args(self):
         ap = argparse.ArgumentParser(
             prog='UDP_Messenger',
             formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -50,8 +51,13 @@ class Parser:
 
         ap.add_argument('-a', help='Local IP address to bind')
         ap.add_argument('-p', help='Local Port to bind')
+        ap.add_argument('-f', help='Path to save files')
         args = ap.parse_args()
+        self.VARS = vars(args)
         return vars(args)
+
+    def get_args(self):
+        return self.VARS
 
     # DONE
     def get_info(self):
@@ -62,6 +68,7 @@ class Parser:
             f'$ BATCH_SIZE: {self.BATCH_SIZE}'
         )
 
+    # DONE
     def set_dgram_size(self):
         """
             User defined DATAGRAM size (in B)
@@ -70,8 +77,8 @@ class Parser:
         """
         desired_size = int(input('$ Set DGRAM_SIZE to (in B): '))
 
-        while desired_size < 1 or desired_size > 1500:
-            desired_size = int(input('! Incorrect DGRAM_SIZE\n$ in B (min. 1, max.1500): '))
+        while desired_size < 1 or desired_size > 1450:
+            desired_size = int(input('! Incorrect DGRAM_SIZE\n$ in B (min. 1, max.1450): '))
 
         self.DGRAM_SIZE = desired_size
         print(f'$ DGRAM_SIZE set to: {self.DGRAM_SIZE}B')
@@ -112,7 +119,14 @@ class Parser:
 
     @staticmethod
     def get_file(path: str):
-        pass
+        try:
+            with open(path, 'rb') as f:
+                data = f.read(-1)
+                f.close()
+                return data
+        except IOError:
+            print('$ Unable to read file')
+            return False
 
     # ------------ DGRAM DECOMPOSITION -------------- #
     # DONE
@@ -226,23 +240,6 @@ class Parser:
             return request, list_of_batches
 
     # --------------- MSG HANDLING ----------------- #
-
-    def alloc_data_array(self, header):
-        """
-            TODO add docstring
-
-            args:
-
-            note:
-        """
-        last_batch_index = header[1]
-        last_dgram_index = header[2]
-
-        if last_batch_index > 0:
-            return [[b''] * self.BATCH_SIZE] * last_batch_index
-        else:
-            return [b''] * last_dgram_index
-
     def alloc_batch_array(self):
         return [b''] * self.BATCH_SIZE
 
@@ -267,6 +264,28 @@ class Parser:
             full_data.decode()
 
         return ''.join(itertools.chain(*full_data))
+
+    @staticmethod
+    def write_file(path: str, name: str, data):
+        try:
+            with open("".join([path, name]), 'wb') as f:
+                if isinstance(data[0], list):
+                    for batch in data:
+                        for dgram in batch:
+                            f.write(dgram)
+
+                elif isinstance(data, list):
+                    for dgram in data:
+                        f.write(dgram)
+                else:
+                    f.write(data)
+
+                print(f'File saved: "{"".join([path, name])}"')
+                f.close()
+
+        except IOError:
+            print('$ Unable to write file')
+            print(f'{"".join([path, name])}')
 
     # --------------- NACK HANDLING ---------------- #
     @staticmethod

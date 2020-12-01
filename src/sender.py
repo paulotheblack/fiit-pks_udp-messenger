@@ -76,14 +76,15 @@ class Sender(Thread):
 
             return: void
         """
-
         if file:
-            flag = 3
-            print('$ Provide absolute path to file')
-            path = input('$ ')
-            data = self.parser.get_file(path)
+            data = False
+            while not data:
+                flag = 4
+                print('$ Provide absolute path to file')
+                path = input('$ ')
+                data = self.parser.get_file(path)
         else:
-            flag = 4
+            flag = 3
             data = input('# ')
 
         request, batch_list = self.parser.create_batch(flag, data)

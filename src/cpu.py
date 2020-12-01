@@ -25,6 +25,7 @@ class Cpu:
         self.socket = socket.get_socket()
         self.pars = parser
         self.sender = sender
+        self.FILE_PATH = self.pars.get_args()['f']
 
     # -------------------  HANDSHAKE ------------------------- #
     def recv_syn(self, source_address: tuple):
@@ -60,18 +61,20 @@ class Cpu:
         self.LAST_DGRAM_INDEX = header[2]
 
         self.BATCH = self.pars.alloc_batch_array()
+
+        # If file, ask user for PATH to save it
+        if data.decode() == '4':
+            self.IS_FILE = True
+            print(f'{c.RED}[{self.SRC_ADDR[1]}] Would like to send you file{c.END}')
+            print(f'$ Path to save file is set to: {c.BOLD + c.RED + self.FILE_PATH + c.END}')
+            # self.FILE_PATH = input('$ Absolute path to save file: ')
+        else:
+            self.IS_FILE = False
+
         # debug
         print(f'[REQ] last_batch: {self.LAST_BATCH_INDEX}, '
               f'last_dgram: {self.LAST_DGRAM_INDEX}, '
               f'is_file: {self.IS_FILE}')
-
-        # If file, ask user for PATH to save it
-        if data.decode() == 4:
-            self.IS_FILE = True
-            print(f'[{self.SRC_ADDR[1]}] Would like to send you file, please provide')
-            self.FILE_PATH = input('$ Absolute path to save file: ')
-        else:
-            self.IS_FILE = False
 
     def recv_ack_msg(self, header):
         self.sender.GOT_ACK = True
@@ -111,15 +114,21 @@ class Cpu:
         self.CURR_BATCH_INDEX = header[1]
         self.CURR_DGRAM_INDEX = header[2]
 
+        # TODO FILE_NAME handling
+
         # Checksum is correct
         if self.pars.check_checksum(header, data):
 
             # -  SINGLE DATAGRAM --------------------------------------------------- #
             if self.LAST_BATCH_INDEX == 0 and self.LAST_DGRAM_INDEX == 0:
+                # if data type is file
                 if self.IS_FILE:
+                    # send ACK-FILE
                     self.sender.send_ack_file(self.CURR_BATCH_INDEX)
-                    # TODO save file
+                    # save file
+                    self.pars.write_file(self.FILE_PATH, 'test.jpg', data)
                     pass
+                # if message
                 else:
                     # send ACK
                     self.sender.send_ack_msg(self.CURR_BATCH_INDEX)
@@ -135,10 +144,13 @@ class Cpu:
                 if self.CURR_DGRAM_INDEX == self.LAST_DGRAM_INDEX:
                     # If no datagram is missing
                     if not self.pars.find_indices(self.BATCH, lambda x: x is None):
+                        # if data type is file
                         if self.IS_FILE:
+                            # send ACK-FILE
                             self.sender.send_ack_file(self.CURR_BATCH_INDEX)
-                            # TODO save file
-                            pass
+                            # save file
+                            self.pars.write_file(self.FILE_PATH, 'test.jpg', self.BATCH)
+                        # if message
                         else:
                             # send ACK
                             self.sender.send_ack_msg(self.CURR_BATCH_INDEX)
@@ -158,12 +170,20 @@ class Cpu:
                 if self.CURR_DGRAM_INDEX == (self.pars.BATCH_SIZE - 1):
                     # if no datagram is missing
                     if not self.pars.find_indices(self.BATCH, lambda x: x is None):
-                        # send ACK
-                        self.sender.send_ack_msg(self.CURR_BATCH_INDEX)
+                        # if data type is file
+                        if self.IS_FILE:
+                            # send ACK-FILE
+                            self.sender.send_ack_file(self.CURR_BATCH_INDEX)
+                        # if message
+                        else:
+                            # send ACK-MSG
+                            self.sender.send_ack_msg(self.CURR_BATCH_INDEX)
+
                         # append FULL_DATA with current BATCH
                         self.FULL_DATA.append(self.BATCH.copy())
                         # clear BATCH
                         self.BATCH = self.pars.alloc_batch_array()
+
                     else:
                         # send NACK
                         self.sender.send_nack(self.BATCH)
@@ -172,13 +192,17 @@ class Cpu:
                 if self.CURR_BATCH_INDEX == self.LAST_BATCH_INDEX and self.CURR_DGRAM_INDEX == self.LAST_DGRAM_INDEX:
                     # if no datagram is missing
                     if not self.pars.find_indices(self.BATCH, lambda x: x is None):
+                        # if data type is file
                         if self.IS_FILE:
+                            # send ACK-FILE
                             self.sender.send_ack_file(self.CURR_BATCH_INDEX)
-                            # TODO save file
-                            pass
-
+                            # append FULL_DATA with last/current BATCH
+                            self.FULL_DATA.append(self.BATCH.copy())
+                            # save file
+                            self.pars.write_file(self.FILE_PATH, 'test.jpg', self.FULL_DATA)
+                        # if message
                         else:
-                            # send ACK
+                            # send ACK-MSG
                             self.sender.send_ack_msg(self.CURR_BATCH_INDEX)
                             # append FULL_DATA with last/current BATCH
                             self.FULL_DATA.append(self.BATCH.copy())
