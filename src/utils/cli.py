@@ -41,12 +41,9 @@ class Cli:
                 pass
 
             elif action == ':s':  # settings for changing dgram size
-                self.parser.get_info()
                 self.parser.set_dgram_size()
 
             elif action == ':q':  # quit program
-                self.sockint.close_socket()
-                print('Auf viedersehen!')
-                exit(0)
+                self.sockint.close_socket_stop()
             else:
                 print('$ Unknown action, please try again')

@@ -67,7 +67,7 @@ class Cpu:
         # FILE REQ
         if data_type == '4':
             self.IS_FILE = True
-            print(f'[{self.SRC_ADDR[1]}] {c.RED + c.BOLD} Would like to send you file{c.END}')
+            print(f'{c.DARKCYAN}[{self.SRC_ADDR[1]}] {c.RED + c.BOLD} Sending file: "{self.FILE_NAME}"{c.END}')
 
         # MSG REQ
         else:
@@ -139,7 +139,7 @@ class Cpu:
                     # send ACK
                     self.sender.send_ack_msg(self.CURR_BATCH_INDEX)
                     # CHAT PRINT
-                    print(f'[{self.SRC_ADDR[1]}]({len(data)} B) {c.YELLOW + data.decode() + c.END}')
+                    print(f'{c.DARKCYAN}[{self.SRC_ADDR[1]}]{c.END}({len(data)}B) {c.YELLOW + data.decode() + c.END}')
 
             # - SINGLE BATCH ------------------------------------------------------- #
             elif self.LAST_BATCH_INDEX == 0:
@@ -173,7 +173,7 @@ class Cpu:
                             # merge message
                             msg = self.pars.process_message(self.BATCH)
                             # CHAT PRINT
-                            print(f'[{self.SRC_ADDR[1]}]({len(msg)} B) {c.YELLOW + msg + c.END}')
+                            print(f'{c.DARKCYAN}[{self.SRC_ADDR[1]}]{c.END}({len(msg)}B) {c.YELLOW + msg + c.END}')
                     else:
                         self.sender.send_nack(self.BATCH)
 
@@ -243,7 +243,7 @@ class Cpu:
                             # merge message
                             msg = self.pars.process_message(self.FULL_DATA)
                             # CHAT PRINT
-                            print(f'[{self.SRC_ADDR[1]}]({len(msg)} B) {c.YELLOW + msg + c.END}')
+                            print(f'{c.DARKCYAN}[{self.SRC_ADDR[1]}]{c.END}({len(msg)}B) {c.YELLOW + msg + c.END}')
                     else:
                         # send NACK
                         self.sender.send_nack(self.BATCH)

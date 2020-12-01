@@ -8,6 +8,9 @@ class Sock:
     _sock: socket
 
     def __init__(self, ip, port):
+        self.local_ip = ip
+        self.local_port = port
+        self.local_address = (ip, port)
         self.create_socket(ip, port)
 
     def create_socket(self, address, port):
@@ -34,6 +37,12 @@ class Sock:
     def get_socket(self):
         return self._sock
 
-    def close_socket(self, msg='Socket have been closed'):
-        print(msg)
+    def close_socket(self):
         self._sock.close()
+        self._sock = None
+        print('Socket have been closed')
+
+    def close_socket_stop(self):
+        self._sock.close()
+        print('Socket have been closed\nAuf viedersehen!')
+        exit(0)

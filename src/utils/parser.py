@@ -4,6 +4,7 @@ import argparse
 import textwrap
 import itertools
 import pathlib as p
+import src.utils.color as c
 
 """
 custom header: 8B
@@ -61,7 +62,12 @@ class Parser:
         return self.VARS
 
     # DONE
-    def get_info(self):
+    def set_dgram_size(self):
+        """
+            User defined DATAGRAM size (in B)
+
+            Value can be only between 1 and 1500
+        """
         print(
             f'-----------------------\n'
             f'$ HEADER_SIZE: {self.HEADER_SIZE}\n'
@@ -69,13 +75,6 @@ class Parser:
             f'$ BATCH_SIZE: {self.BATCH_SIZE}'
         )
 
-    # DONE
-    def set_dgram_size(self):
-        """
-            User defined DATAGRAM size (in B)
-
-            Value can be only between 1 and 1500
-        """
         desired_size = int(input('$ Set DGRAM_SIZE to (in B): '))
 
         while desired_size < 1 or desired_size > 1450:
@@ -129,7 +128,6 @@ class Parser:
             print('$ Unable to read file')
             return None, None
 
-    # ?
     def write_file(self, path: str, name: str, data):
         try:
             with open("".join([path, name]), 'wb') as f:
@@ -152,7 +150,7 @@ class Parser:
                 posix_path = p.Path("".join([path, name]))
                 size = posix_path.stat().st_size
                 size_readable = self.convert_size(size)
-                print(f'[FILE]({size_readable}) "{posix_path}"')
+                print(f'{c.DARKCYAN}[FILE]({size_readable}) {c.RED + c.BOLD}"{posix_path}"{c.END}')
 
         except IOError:
             print(IOError.strerror + '' + IOError.errno)
@@ -165,7 +163,7 @@ class Parser:
         """
         for x in ['B', 'KB', 'MB', 'GB', 'TB']:
             if num < 1024.0:
-                return "%3.1f %s" % (num, x)
+                return "%3.1f%s" % (num, x)
             num /= 1024.0
 
     # ------------ DGRAM DECOMPOSITION -------------- #

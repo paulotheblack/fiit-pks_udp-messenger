@@ -104,6 +104,8 @@ class Sender(Thread):
         request, batch_list = self.parser.create_batch(flag, data)
         self.send(request)
 
+        # TODO ask if want to receive file!
+
         # -  SINGLE DATAGRAM --------------------------------------------------- #
         if isinstance(batch_list, bytes):
             self.send(batch_list)
