@@ -36,9 +36,17 @@ class Cpu:
 
     def recv_ack(self, source_address: tuple):
         self.SRC_ADDR = source_address
+        # Set flags for 'Sender'
         self.sender.GOT_ACK = True
+        self.sender.GOT_FIN = False
 
         print(f'{c.RED + "[log]" + c.END} Connection with {c.DARKCYAN}{self.SRC_ADDR[0]}{c.END} established!')
+
+    def recv_fin(self):
+        # set flag for 'Sender'
+        self.sender.GOT_FIN = True
+        print(f'{c.PURPLE + c.BOLD}[{self.SRC_ADDR[0]}] Closed connection!{c.END}')
+        self.SRC_ADDR = None
 
     # -------------------  ACKs/NACK ------------------------- #
     def recv_request(self, header, data):
@@ -257,7 +265,12 @@ class Cpu:
                         # send NACK
                         self.sender.send_nack(self.BATCH)
 
+        # if recv corrupted data
         else:
             self.BATCH.insert(self.CURR_DGRAM_INDEX, None)
+
+            # if recv corrupted data and the message is long as single datagram
+            if self.LAST_BATCH_INDEX == 0 and self.LAST_DGRAM_INDEX == 0:
+                self.sender.send_nack(self.BATCH)
 
     # ---------------------- TTL ---------------------------- #

@@ -37,13 +37,14 @@ class Cli:
             elif action == ':f':  # send file
                 self.sender.input_data(file=True)
 
-            elif action == ':d':  # drop connection [do not send keep-alive]
-                pass
+            elif action == ':d':  # disconnect
+                self.sender.send_fin()
 
             elif action == ':s':  # settings for changing dgram size
                 self.parser.set_dgram_size()
 
             elif action == ':q':  # quit program
+                self.sender.send_fin(eol=True)
                 self.sockint.close_socket_stop()
             else:
-                print('$ Unknown action, please try again')
+                print('> Unknown action, please try again')

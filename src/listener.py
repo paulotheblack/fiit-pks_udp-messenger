@@ -49,3 +49,7 @@ class Listener(Thread):
 
             elif header[0] == 9:  # FILE_NAME
                 self.cpu.recv_data(header, data, file_name=True)
+
+            elif header[0] == 10:  # FIN
+                self.cpu.recv_fin()
+                pass

@@ -8,9 +8,11 @@ class Sender(Thread):
     DEST_ADDR: tuple = None
 
     # ARQ + ERR handling flags
-    GOT_ACK: bool = None
     ACK_NO: int = None
+    GOT_ACK: bool = None
     GOT_NACK: bool = None
+    GOT_FIN: bool = None
+    SENT_FIN: bool = None
     # Indexes to resend
     TO_RESEND: list = None
 
@@ -35,12 +37,29 @@ class Sender(Thread):
             # TODO implement KEEP_ALIVE
             pass
 
-        # Reset flag
+        # Reset flags
         self.GOT_ACK = False
+        self.SENT_FIN = False
 
     def send_ack(self):
         dgram = self.parser.create_dgram(1, 0, 0, b'')
         self.send(dgram)
+
+    def send_fin(self, eol=False):
+        # if FIN already send
+        if self.SENT_FIN or self.GOT_FIN:
+            # If not END OF LIFE of the program
+            if not eol:
+                print(f'{c.RED}[log]{c.END} No connection to close')
+            return
+
+        elif self.GOT_FIN is False:
+            dgram = self.parser.create_dgram(10, 0, 0, b'')
+            self.send(dgram)
+
+            self.DEST_ADDR = None
+            self.SENT_FIN = True
+            print(f'{c.RED}[log]{c.END} Connection dropped!')
 
     # -------------------  ACKs/NACK ------------------------- #
     def send_ack_msg(self, batch_no):
@@ -58,6 +77,11 @@ class Sender(Thread):
 
     # ---------------------  DATA ---------------------------- #
     def input_data(self, file=False):
+        if self.GOT_FIN or self.DEST_ADDR is None:
+            print(f'{c.RED}[log]{c.END} Not connected to any client!\n'
+                  f'> Need to establish connection first (type ":c")')
+            return
+
         if file:
             data = False
             while not data:
