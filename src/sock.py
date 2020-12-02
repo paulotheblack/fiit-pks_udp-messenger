@@ -5,7 +5,7 @@ class Sock:
     local_ip: str
     local_port: str
     local_address: tuple
-    _sock: socket
+    _sock: socket = None
 
     def __init__(self, ip, port):
         self.local_ip = ip
@@ -26,13 +26,16 @@ class Sock:
         self.local_ip = address
         self.local_port = int(port)
         self.local_address = (self.local_ip, self.local_port)
-        self._sock = socket(AF_INET, SOCK_DGRAM)
 
-        try:
-            self._sock.bind(self.local_address)
-        except PermissionError:
-            print('>> Selected port is occupied!')
-            self.local_port = int(input('$ at port: '))
+        while self._sock is None:
+            try:
+                self._sock = socket(AF_INET, SOCK_DGRAM)
+                self._sock.bind((self.local_ip, self.local_port))
+            except OSError:
+                print('> Selected port is occupied, please try again!')
+                self._sock = None
+                self.local_ip = input('> Local IP: ')
+                self.local_port = int(input('> Local port: '))
 
     def get_socket(self):
         return self._sock
@@ -44,5 +47,5 @@ class Sock:
 
     def close_socket_stop(self):
         self._sock.close()
-        print('Socket have been closed\nAuf viedersehen!')
+        print('[log] Socket have been closed\nAuf viedersehen!')
         exit(0)

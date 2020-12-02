@@ -1,3 +1,4 @@
+import select
 from threading import Thread
 
 from src.sock import Sock
@@ -29,17 +30,11 @@ class Listener(Thread):
             elif header[0] == 2:   # REQ
                 self.cpu.recv_request(header, data)
 
-            elif header[0] == 3:  # MSG
+            elif header[0] == 3 or header[0] == 4:  # DATA
                 self.cpu.recv_data(header, data)
 
-            elif header[0] == 4:  # FILE
-                self.cpu.recv_data(header, data)
-
-            elif header[0] == 5:  # ACK_MSG
-                self.cpu.recv_ack_msg()
-
-            elif header[0] == 6:  # ACK_FILE
-                self.cpu.recv_ack_file(header)
+            elif header[0] == 5:  # ACK_DATA
+                self.cpu.recv_ack_data(header)
 
             elif header[0] == 7:  # NACK
                 self.cpu.recv_nack(header)
@@ -52,4 +47,4 @@ class Listener(Thread):
 
             elif header[0] == 10:  # FIN
                 self.cpu.recv_fin()
-                pass
+

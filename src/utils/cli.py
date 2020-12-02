@@ -37,14 +37,27 @@ class Cli:
             elif action == ':f':  # send file
                 self.sender.input_data(file=True)
 
+            elif action == ':em':  # ARQ Message
+                self.sender.input_data(err=True)
+
+            elif action == ':ef':  # ARQ File
+                self.sender.input_data(file=True, err=True)
+
             elif action == ':d':  # disconnect
                 self.sender.send_fin()
 
             elif action == ':s':  # settings for changing dgram size
                 self.parser.set_dgram_size()
 
+            elif action == ':x':
+                print(f'----------------------\n'
+                      f'GOT_ACK: {self.sender.GOT_ACK}\n'
+                      f'GOT_NACK: {self.sender.GOT_NACK}\n'
+                      f'----------------------')
+
             elif action == ':q':  # quit program
-                self.sender.send_fin(eol=True)
+                self.sender.send_fin(eof=True)
                 self.sockint.close_socket_stop()
+
             else:
                 print('> Unknown action, please try again')

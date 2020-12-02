@@ -1,3 +1,5 @@
+import select
+
 from src.utils.parser import Parser
 from src.sender import Sender
 from src.sock import Sock
@@ -8,17 +10,19 @@ import src.utils.color as c
 class Cpu:
     SRC_ADDR: tuple = None
 
-    BATCH: list = []
-    FULL_DATA: list = []
+    RECV_DATA_BUFFER: list = []
 
     CURR_BATCH_INDEX: int = None
     CURR_DGRAM_INDEX: int = None
     LAST_BATCH_INDEX: int = None
     LAST_DGRAM_INDEX: int = None
+    DGRAMS_RECV: int = 0
 
     IS_FILE: bool = None
     FILE_NAME: str = None
     FILE_PATH: str = None
+
+    CONNECTED: bool = None
 
     def __init__(self, socket: Sock, parser: Parser, sender: Sender):
         self.sockint = socket
@@ -32,245 +36,111 @@ class Cpu:
         self.SRC_ADDR = source_address
         self.sender.DEST_ADDR = source_address
         self.sender.send_ack()
-        print(f'{c.RED + "[log]" + c.END} Connection request from {c.DARKCYAN}{source_address[0]}:{source_address[1]}{c.END}')
+        self.sender.CONNECTED = True
+        print(f'{c.RED + "[log]" + c.DARKCYAN} {source_address[0]}{c.END} connected to session!')
 
     def recv_ack(self, source_address: tuple):
         self.SRC_ADDR = source_address
-        # Set flags for 'Sender'
-        self.sender.GOT_ACK = True
-        self.sender.GOT_FIN = False
+        self.sender.CONNECTED = True
+        self.CONNECTED = True
 
         print(f'{c.RED + "[log]" + c.END} Connection with {c.DARKCYAN}{self.SRC_ADDR[0]}{c.END} established!')
 
     def recv_fin(self):
-        # set flag for 'Sender'
-        self.sender.GOT_FIN = True
         print(f'{c.PURPLE + c.BOLD}[{self.SRC_ADDR[0]}] Closed connection!{c.END}')
+        self.sender.CONNECTED = False
+        self.sender.DEST_ADDR = None
         self.SRC_ADDR = None
 
     # -------------------  ACKs/NACK ------------------------- #
     def recv_request(self, header, data):
-        """
-            TODO add docstring
-
-            args:
-            Runtime:
-            return:
-        """
-
-        # Empty previous buffers
-        if self.FULL_DATA:
-            self.FULL_DATA.clear()
-        if self.BATCH:
-            self.BATCH.clear()
-
         self.LAST_BATCH_INDEX = header[1]
         self.LAST_DGRAM_INDEX = header[2]
 
-        self.BATCH = self.pars.alloc_batch_array()
-
-        data_type = data.decode()
-
-        # FILE REQ
-        if data_type == '4':
+        self.RECV_DATA_BUFFER = self.pars.create_data_buffer(self.LAST_BATCH_INDEX, self.LAST_DGRAM_INDEX)
+        # FILE
+        if data.decode() == '4':
             self.IS_FILE = True
             print(f'{c.DARKCYAN}[{self.SRC_ADDR[0]}]{c.RED + c.BOLD} is sending file "{self.FILE_NAME}"{c.END}')
-
-        # MSG REQ
+        # MSG
         else:
             self.IS_FILE = False
 
-        # debug
-        # print(f'[REQ {data_type}] last_batch: {self.LAST_BATCH_INDEX}, '
-        #       f'last_dgram: {self.LAST_DGRAM_INDEX}, '
-        #       f'is_file: {self.IS_FILE}')
-
-    def recv_ack_msg(self):
-        self.sender.GOT_ACK = True
-
-    def recv_ack_file(self, header):
+    def recv_ack_data(self, header):
         self.sender.GOT_ACK = True
         self.sender.ACK_NO = header[1]
+        # print(f'[log] recv ACK')
 
-    # TODO maybe change logic of NACK
     def recv_nack(self, header):
-        """
-            Usage:
-                1.
-        """
         self.sender.GOT_NACK = True
         self.sender.TO_RESEND = self.pars.parse_nack_field(header)
 
         # debug
-        print(f'[NACK] {self.sender.TO_RESEND}')
+        print(f'{c.RED}[RECV_NACK]{c.END} stderr in: {self.sender.TO_RESEND} dgram/s')
 
     # ---------------------  DATA ---------------------------- #
     def recv_data(self, header, data: bytearray, file_name=False):
-        """
-            TODO add docstring
-
-            args:
-
-            usage:
-
-            return:
-        """
         self.CURR_BATCH_INDEX = header[1]
         self.CURR_DGRAM_INDEX = header[2]
 
+        self.DGRAMS_RECV += 1
+
         # Checksum is correct
         if self.pars.check_checksum(header, data):
-
-            # -  SINGLE DATAGRAM --------------------------------------------------- #
-            if self.LAST_BATCH_INDEX == 0 and self.LAST_DGRAM_INDEX == 0:
-                # if data type is file
-                if self.IS_FILE:
-                    # send ACK-FILE
-                    self.sender.send_ack_file(self.CURR_BATCH_INDEX)
-                    # save file
-                    path, size = self.pars.write_file(self.FILE_PATH, self.FILE_NAME, data)
-
-                    if size:
-                        print(f'{c.DARKCYAN}[FILE]({size}) {c.RED + c.BOLD}"{path}"{c.END}')
-                    else:
-                        print(f'> Unable to save file to: {self.FILE_PATH}')
-
-                # if file name
-                elif file_name:
-                    # send ACK
-                    self.sender.send_ack_msg(self.CURR_BATCH_INDEX)
-                    # assign FILE_NAME
-                    self.FILE_NAME = data.decode()
-
-                # if message
-                else:
-                    # send ACK
-                    self.sender.send_ack_msg(self.CURR_BATCH_INDEX)
-                    # CHAT PRINT
-                    print(f'{c.DARKCYAN}[{self.SRC_ADDR[0]}]{c.END}({len(data)}B) {c.YELLOW + data.decode() + c.END}')
-
-            # - SINGLE BATCH ------------------------------------------------------- #
-            elif self.LAST_BATCH_INDEX == 0:
-                # insert datagram to BATCH ta CURRENT INDEX
-                self.BATCH[self.CURR_DGRAM_INDEX] = data
-
-                # If last datagram
-                if self.CURR_DGRAM_INDEX == self.LAST_DGRAM_INDEX:
-                    # If no datagram is missing
-                    if not self.pars.find_indices(self.BATCH, lambda x: x is None):
-                        # if data type is file
-                        if self.IS_FILE:
-                            # send ACK-FILE
-                            self.sender.send_ack_file(self.CURR_BATCH_INDEX)
-                            # save file
-                            path, size = self.pars.write_file(self.FILE_PATH, self.FILE_NAME, self.BATCH)
-                            if size:
-                                print(f'{c.DARKCYAN}[FILE]({size}) {c.RED + c.BOLD}"{path}"{c.END}')
-                            else:
-                                print(f'> Unable to save file to: {self.FILE_PATH}')
-
-                        # if file name
-                        elif file_name:
-                            # send ACK
-                            self.sender.send_ack_msg(self.CURR_BATCH_INDEX)
-                            # merge message
-                            msg = self.pars.process_message(self.BATCH)
-                            # assign FILE_NAME
-                            self.FILE_NAME = msg
-
-                        # if message
-                        else:
-                            # send ACK
-                            self.sender.send_ack_msg(self.CURR_BATCH_INDEX)
-                            # merge message
-                            msg = self.pars.process_message(self.BATCH)
-                            # CHAT PRINT
-                            print(f'{c.DARKCYAN}[{self.SRC_ADDR[0]}]{c.END}({len(msg)}B) {c.YELLOW + msg + c.END}')
-                    else:
-                        self.sender.send_nack(self.BATCH)
-
-            # - MULTIPLE BATCHES --------------------------------------------------- #
-            else:
-                # insert datagram to BATCH ta CURRENT INDEX
-                self.BATCH[self.CURR_DGRAM_INDEX] = data
-
-                # After each batch
-                if self.CURR_DGRAM_INDEX == (self.pars.BATCH_SIZE - 1):
-                    # if no datagram is missing
-                    if not self.pars.find_indices(self.BATCH, lambda x: x is None):
-                        # if data type is file
-                        if self.IS_FILE:
-                            # send ACK-FILE
-                            self.sender.send_ack_file(self.CURR_BATCH_INDEX)
-
-                        # if file name
-                        elif file_name:
-                            # send ACK
-                            self.sender.send_ack_msg(self.CURR_BATCH_INDEX)
-
-                        # if message
-                        else:
-                            # send ACK-MSG
-                            self.sender.send_ack_msg(self.CURR_BATCH_INDEX)
-
-                        # append FULL_DATA with current BATCH
-                        self.FULL_DATA.append(self.BATCH.copy())
-                        # clear BATCH
-                        self.BATCH = self.pars.alloc_batch_array()
-
-                    else:
-                        # send NACK
-                        self.sender.send_nack(self.BATCH)
-
-                # Last batch
-                if self.CURR_BATCH_INDEX == self.LAST_BATCH_INDEX and self.CURR_DGRAM_INDEX == self.LAST_DGRAM_INDEX:
-                    # if no datagram is missing
-                    if not self.pars.find_indices(self.BATCH, lambda x: x is None):
-                        # if data type is file
-                        if self.IS_FILE:
-                            # send ACK-FILE
-                            self.sender.send_ack_file(self.CURR_BATCH_INDEX)
-                            # append FULL_DATA with last/current BATCH
-                            self.FULL_DATA.append(self.BATCH.copy())
-                            # save file
-                            path, size = self.pars.write_file(self.FILE_PATH, self.FILE_NAME, self.FULL_DATA)
-
-                            if size:
-                                print(f'{c.DARKCYAN}[FILE]({size}) {c.RED + c.BOLD}"{path}"{c.END}')
-                            else:
-                                print(f'> Unable to save file to: {self.FILE_PATH}')
-
-                        # if file name
-                        elif file_name:
-                            # send ACK
-                            self.sender.send_ack_msg(self.CURR_BATCH_INDEX)
-                            # append FULL_DATA with last/current BATCH
-                            self.FULL_DATA.append(self.BATCH.copy())
-                            # merge message
-                            msg = self.pars.process_message(self.FULL_DATA)
-                            # assign FILE_NAME
-                            self.FILE_NAME = msg
-
-                        # if message
-                        else:
-                            # send ACK-MSG
-                            self.sender.send_ack_msg(self.CURR_BATCH_INDEX)
-                            # append FULL_DATA with last/current BATCH
-                            self.FULL_DATA.append(self.BATCH.copy())
-                            # merge message
-                            msg = self.pars.process_message(self.FULL_DATA)
-                            # CHAT PRINT
-                            print(f'{c.DARKCYAN}[{self.SRC_ADDR[0]}]{c.END}({len(msg)}B) {c.YELLOW + msg + c.END}')
-                    else:
-                        # send NACK
-                        self.sender.send_nack(self.BATCH)
-
+            self.RECV_DATA_BUFFER[self.CURR_BATCH_INDEX][self.CURR_DGRAM_INDEX] = data
         # if recv corrupted data
         else:
-            self.BATCH.insert(self.CURR_DGRAM_INDEX, None)
+            self.RECV_DATA_BUFFER[self.CURR_BATCH_INDEX][self.CURR_DGRAM_INDEX] = None
+            print(f'[!!!] -> [{self.CURR_BATCH_INDEX}][{self.CURR_DGRAM_INDEX}]')
 
-            # if recv corrupted data and the message is long as single datagram
-            if self.LAST_BATCH_INDEX == 0 and self.LAST_DGRAM_INDEX == 0:
-                self.sender.send_nack(self.BATCH)
+        # if no empty(DATA or None)
+        if not self.pars.find_index(self.RECV_DATA_BUFFER[self.CURR_BATCH_INDEX], lambda x: x == b''):
+            to_resend = self.pars.find_index(self.RECV_DATA_BUFFER[self.CURR_BATCH_INDEX], lambda x: x is None)
+            if not to_resend:
+                # If okay, send ACK_DATA
+                self.sender.send_ack_data(self.CURR_BATCH_INDEX)
 
-    # ---------------------- TTL ---------------------------- #
+                # If last batch process data:
+                if self.CURR_BATCH_INDEX == self.LAST_BATCH_INDEX:
+                    self.stdout(file_name=file_name)
+
+            else:
+                # If any missing data, send NACK
+                self.sender.send_nack(to_resend)
+                # Reset to_resend
+                self.reset_batch(to_resend)
+                to_resend.clear()
+
+    def stdout(self, file_name=False):
+        # If file
+        if self.IS_FILE:
+            # save file
+            path, size = self.pars.write_file(self.FILE_PATH, self.FILE_NAME, self.RECV_DATA_BUFFER)
+            # STDOUT PRINT
+            if size:
+                print(f'{c.DARKCYAN}[FILE]({size})({self.DGRAMS_RECV}DGs) {c.RED + c.BOLD}"{path}"{c.END}')
+            # IF SIZE == 0: OSError (Permissions)
+            else:
+                print(f'> ({self.DGRAMS_RECV} DR) Unable to save file to: {self.FILE_PATH}')
+            # reset DGs counter
+            self.DGRAMS_RECV = 0
+
+        # If file name
+        elif file_name:
+            # merge and assign file name
+            self.FILE_NAME = self.pars.process_message(self.RECV_DATA_BUFFER)
+
+        # if message
+        else:
+            msg = self.pars.process_message(self.RECV_DATA_BUFFER)
+            # STDOUT PRINT
+            print(f'{c.DARKCYAN}[{self.SRC_ADDR[0]}]{c.END}'
+                  f'({len(msg)}B)({self.DGRAMS_RECV}DGs) '
+                  f'{c.YELLOW + msg + c.END}')
+            # reset DGs counter
+            self.DGRAMS_RECV = 0
+
+    def reset_batch(self, to_resend):
+        for index, dgram in enumerate(self.RECV_DATA_BUFFER[self.CURR_BATCH_INDEX]):
+            if index in to_resend:
+                self.RECV_DATA_BUFFER[self.CURR_BATCH_INDEX][index] = b''

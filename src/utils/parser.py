@@ -30,7 +30,7 @@ _FLAGS:
 
 class Parser:
     HEADER_SIZE = 8
-    DGRAM_SIZE = 1450 - HEADER_SIZE  # MAX SIZE 1450
+    DGRAM_SIZE = 1448  # MAX SIZE 1450
     BATCH_SIZE = 8  # MAX 8
 
     VARS = None
@@ -285,7 +285,7 @@ class Parser:
                     start += self.DGRAM_SIZE
                     end = start + self.DGRAM_SIZE
 
-                    if start > _DATA_LEN:
+                    if start >= _DATA_LEN:
                         break
 
                 list_of_batches.append(batch.copy())
@@ -299,31 +299,36 @@ class Parser:
 
     # --------------- MSG HANDLING ----------------- #
     # DONE
-    def alloc_batch_array(self):
-        return [b''] * self.BATCH_SIZE
+    def create_data_buffer(self, last_batch_index, last_dgram_index):
+        # - SINGLE DGRAM - #
+        if last_batch_index == 0 and last_dgram_index == 0:
+            return [[b'']]
+        # - SINGLE BATCH - #
+        elif last_batch_index == 0:
+            return [[b'' for x in range(last_dgram_index + 1)] for y in range(last_batch_index + 1)]
+        # - MULTI BATCH - #
+        else:
+            buff = [[b'' for x in range(self.BATCH_SIZE)] for y in range(last_batch_index)]
+            buff.append([b'' for x in range(last_dgram_index + 1)])
+        return buff
 
     # DONE
     @staticmethod
-    def process_message(full_data):
-        """
-            TODO add docstring
-
-            decode & merge message
-        """
-        if isinstance(full_data[0], list):
-            for batch in full_data:
+    def process_message(recv_data_buffer):
+        if isinstance(recv_data_buffer[0], list):
+            for batch in recv_data_buffer:
                 for i, dgram in enumerate(batch):
                     if isinstance(dgram, bytes):
                         batch[i] = dgram.decode()
 
-        elif isinstance(full_data, list):
-            for i, dgram in enumerate(full_data):
+        elif isinstance(recv_data_buffer, list):
+            for i, dgram in enumerate(recv_data_buffer):
                 if isinstance(dgram, bytes):
-                    full_data[i] = dgram.decode()
+                    recv_data_buffer[i] = dgram.decode()
         else:
-            full_data.decode()
+            recv_data_buffer.decode()
 
-        return ''.join(itertools.chain(*full_data))
+        return ''.join(itertools.chain(*recv_data_buffer))
 
     # --------------- NACK HANDLING ---------------- #
     # DONE
@@ -342,11 +347,11 @@ class Parser:
 
     # DONE
     @staticmethod
-    def find_indices(arr: list, condition):
+    def find_index(arr: list, condition):
         return [i for i, elem in enumerate(arr) if condition(elem)]
 
     # DONE
-    def get_nack_field(self, batch: list):
+    def get_nack_field(self, to_resend: list):
         """
             create 1B field with indications of missing datagrams
 
@@ -360,10 +365,10 @@ class Parser:
         """
 
         nack_field = 0b00000000
-        to_resend = self.find_indices(batch, lambda x: x is None)
+        # to_resend = self.find_index(batch, lambda x: x is None)
 
         for index in to_resend:
-            self.set_bit(nack_field, index)
+            nack_field = self.set_bit(nack_field, index)
 
         return nack_field
 
@@ -377,4 +382,4 @@ class Parser:
         """
         nack_field = header[2]
 
-        return self.find_indices(reversed(list(f'{nack_field:08b}')), lambda x: x == '1')
+        return self.find_index(reversed(list(f'{nack_field:08b}')), lambda x: x == '1')
