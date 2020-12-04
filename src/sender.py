@@ -60,18 +60,17 @@ class Sender(Thread):
         dgram = self.parser.create_dgram(1, 0, 0, b'')
         self.send(dgram)
 
-    def send_fin(self, eof=False):
+    def send_fin(self, msg='Connection dropped!'):
         if self.CONNECTED:
             dgram = self.parser.create_dgram(10, 0, 0, b'')
             self.send(dgram)
 
+            print(f'{c.PURPLE + c.BOLD}{msg}{c.END}')
             self.DEST_ADDR = None
             self.CONNECTED = False
-            print(f'{c.RED}[log]{c.END} Connection dropped!')
 
         else:
-            if not eof:
-                print(f'{c.RED}[log]{c.END} No connection to close')
+            print(f'{c.RED}[log]{c.END} No connection to close')
 
     # -------------------  ACKs/NACK ------------------------- #
     def send_ack_data(self, batch_no):
@@ -81,8 +80,13 @@ class Sender(Thread):
 
     def send_nack(self, to_resend):
         nack_field = self.parser.get_nack_field(to_resend)
-        dgram = self.parser.create_dgram(7, 0, nack_field, b'')
-        print('[log] sending NACK')
+        dgram = self.parser.create_dgram(6, 0, nack_field, b'')
+        print(f'{c.RED}[log]{c.END} sending NACK')
+        self.send(dgram)
+
+    def send_keepalive(self):
+        dgram = self.parser.create_dgram(8, 0, 0, b'')
+        print(f'{c.RED}[log]{c.END} sent TTL')
         self.send(dgram)
 
     # ---------------------  DATA ---------------------------- #
@@ -159,7 +163,7 @@ class Sender(Thread):
                 return self.send_fin()
 
             if self.GOT_NACK:
-                self.retransmit_current_batch(batch_list)
+                self.retransmit_current_batch(batch_list, 0)
 
             self.data_sent(flag, batch_index=0)
 
@@ -181,7 +185,7 @@ class Sender(Thread):
                 return self.send_fin()
 
             if self.GOT_NACK:
-                self.retransmit_current_batch(batch_list)
+                self.retransmit_current_batch(batch_list, 0)
 
             self.data_sent(flag, batch_index=0)
 

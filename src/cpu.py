@@ -3,13 +3,13 @@ import select
 from src.utils.parser import Parser
 from src.sender import Sender
 from src.sock import Sock
+from src.keepalive import KeepAlive
 
 import src.utils.color as c
 
 
-class Cpu:
+class CPU:
     SRC_ADDR: tuple = None
-
     RECV_DATA_BUFFER: list = []
 
     CURR_BATCH_INDEX: int = None
@@ -22,13 +22,12 @@ class Cpu:
     FILE_NAME: str = None
     FILE_PATH: str = None
 
-    CONNECTED: bool = None
-
-    def __init__(self, socket: Sock, parser: Parser, sender: Sender):
+    def __init__(self, socket: Sock, parser: Parser, sender: Sender, keepalive: KeepAlive):
         self.sockint = socket
         self.socket = socket.get_socket()
         self.pars = parser
         self.sender = sender
+        self.keepalive = keepalive
         self.FILE_PATH = self.pars.get_args()['f']
 
     # -------------------  HANDSHAKE ------------------------- #
@@ -37,20 +36,32 @@ class Cpu:
         self.sender.DEST_ADDR = source_address
         self.sender.send_ack()
         self.sender.CONNECTED = True
+
+        # start keepalive mechanism
+        self.keepalive.START = True
+        # LOG
         print(f'{c.RED + "[log]" + c.DARKCYAN} {source_address[0]}{c.END} connected to session!')
 
     def recv_ack(self, source_address: tuple):
         self.SRC_ADDR = source_address
         self.sender.CONNECTED = True
-        self.CONNECTED = True
 
+        # start keepalive mechanism
+        self.keepalive.START = True
+        # LOG
         print(f'{c.RED + "[log]" + c.END} Connection with {c.DARKCYAN}{self.SRC_ADDR[0]}{c.END} established!')
 
     def recv_fin(self):
         print(f'{c.PURPLE + c.BOLD}[{self.SRC_ADDR[0]}] Closed connection!{c.END}')
+        # stop keepalive thread
+        self.keepalive.STOP = True
         self.sender.CONNECTED = False
         self.sender.DEST_ADDR = None
         self.SRC_ADDR = None
+
+    def recv_ttl(self):
+        self.keepalive.RECV_TTL = True
+        print(f'{c.RED}[log]{c.END} recv KeepAlive')
 
     # -------------------  ACKs/NACK ------------------------- #
     def recv_request(self, header, data):

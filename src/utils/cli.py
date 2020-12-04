@@ -1,15 +1,17 @@
 from src.sock import Sock
 from src.utils.parser import Parser
 from src.sender import Sender
+from src.keepalive import KeepAlive
 
 
 class Cli:
 
-    def __init__(self, sockint: Sock, parser: Parser, sender: Sender):
+    def __init__(self, sockint: Sock, parser: Parser, sender: Sender, keepalive: KeepAlive):
         self.sockint = sockint
         self.socket = sockint.get_socket()
         self.parser = parser
         self.sender = sender
+        self.keepalive = keepalive
 
     def welcome(self):
         print(
@@ -49,8 +51,16 @@ class Cli:
             elif action == ':s':  # settings for changing dgram size
                 self.parser.set_dgram_size()
 
+            elif action == ':kk':
+                self.keepalive.STOP = True
+                print('> Stopped sending KeepAlive')
+
             elif action == ':q':  # quit program
-                self.sender.send_fin(eof=True)
+                self.keepalive.STOP = True
+                self.keepalive.KILL = True
+                self.keepalive.join()
+                # self.keepalive.
+                self.sender.send_fin()
                 self.sockint.close_socket_stop()
 
             else:
