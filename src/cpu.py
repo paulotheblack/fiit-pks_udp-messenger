@@ -86,14 +86,13 @@ class Cpu:
         self.DGRAMS_RECV += 1
 
         # Checksum is correct
-        if self.pars.check_checksum(header, data):
+        if self.pars.check_sum(header, data):
             self.RECV_DATA_BUFFER[self.CURR_BATCH_INDEX][self.CURR_DGRAM_INDEX] = data
         # if recv corrupted data
         else:
             self.RECV_DATA_BUFFER[self.CURR_BATCH_INDEX][self.CURR_DGRAM_INDEX] = None
             print(f'[!!!] -> [{self.CURR_BATCH_INDEX}][{self.CURR_DGRAM_INDEX}]')
 
-        # if no empty(DATA or None)
         if not self.pars.find_index(self.RECV_DATA_BUFFER[self.CURR_BATCH_INDEX], lambda x: x == b''):
             to_resend = self.pars.find_index(self.RECV_DATA_BUFFER[self.CURR_BATCH_INDEX], lambda x: x is None)
             if not to_resend:
@@ -110,6 +109,11 @@ class Cpu:
                 # Reset to_resend
                 self.reset_batch(to_resend)
                 to_resend.clear()
+
+    def reset_batch(self, to_resend):
+        for index, dgram in enumerate(self.RECV_DATA_BUFFER[self.CURR_BATCH_INDEX]):
+            if index in to_resend:
+                self.RECV_DATA_BUFFER[self.CURR_BATCH_INDEX][index] = b''
 
     def stdout(self, file_name=False):
         # If file
@@ -139,8 +143,3 @@ class Cpu:
                   f'{c.YELLOW + msg + c.END}')
             # reset DGs counter
             self.DGRAMS_RECV = 0
-
-    def reset_batch(self, to_resend):
-        for index, dgram in enumerate(self.RECV_DATA_BUFFER[self.CURR_BATCH_INDEX]):
-            if index in to_resend:
-                self.RECV_DATA_BUFFER[self.CURR_BATCH_INDEX][index] = b''

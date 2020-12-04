@@ -49,12 +49,6 @@ class Cli:
             elif action == ':s':  # settings for changing dgram size
                 self.parser.set_dgram_size()
 
-            elif action == ':x':
-                print(f'----------------------\n'
-                      f'GOT_ACK: {self.sender.GOT_ACK}\n'
-                      f'GOT_NACK: {self.sender.GOT_NACK}\n'
-                      f'----------------------')
-
             elif action == ':q':  # quit program
                 self.sender.send_fin(eof=True)
                 self.sockint.close_socket_stop()

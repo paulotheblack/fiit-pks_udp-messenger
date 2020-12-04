@@ -12,8 +12,8 @@ class Sender(Thread):
     CONNECTED: bool = False
 
     # ARQ + ERR handling flags
-    ACK_NO: int = None
     GOT_ACK: bool = False
+    ACK_NO: int = None
     GOT_NACK: bool = False
 
     # Indexes to resend
@@ -31,7 +31,7 @@ class Sender(Thread):
 
         self.socket.sendto(dgram, self.DEST_ADDR)
 
-    # -------------------  HANDSHAKE ------------------------- #
+    # -------------------  CONNECTION ------------------------- #
     def send_syn(self):
         if self.CONNECTED:
             print(f'{c.RED}[log]{c.END} Already connected to {c.DARKCYAN}{self.DEST_ADDR[0]}:{self.DEST_ADDR[1]}{c.END}')
@@ -87,6 +87,7 @@ class Sender(Thread):
 
     # ---------------------  DATA ---------------------------- #
     def input_data(self, file=False, err=False):
+        # Check connection first
         if not self.CONNECTED or self.DEST_ADDR is None:
             print(f'{c.RED}[log]{c.END} Not connected to any client!\n'
                   f'> Need to establish connection first (type ":c")')
@@ -96,12 +97,15 @@ class Sender(Thread):
             data = False
             while not data:
                 flag = 4
+                # absolute path to file
                 path = input('> Provide absolute path to file\n# ')
+                # if user wants to escape 'file sending'
                 if path == ':q':
                     return
 
                 data, file_name = self.parser.get_file(path)
 
+                # Unable to load file, try again
                 if not data:
                     return
 
@@ -112,11 +116,12 @@ class Sender(Thread):
 
         else:
             flag = 3
+            # user input
             data = input('# ')
             # send_message
             self.send_data(flag, data, err)
 
-    def send_data(self, flag, data, err=False):
+    def send_data(self, flag, data, err=False, ratio=7):
         """
             Send data from user
 
@@ -149,95 +154,109 @@ class Sender(Thread):
                 self.send(batch_list)
 
             # do not send next batch until MSG_ACK or NACK received
-            while self.GOT_ACK is False:
-                if self.GOT_NACK:
-                    break
-                pass
+            if not self.recv_current_ack(current_batch=0):
+                # if unexpected err on other side, drop connection
+                return self.send_fin()
 
             if self.GOT_NACK:
-                self.retransmission(batch_list)
+                self.retransmit_current_batch(batch_list)
 
-            if (flag == 4 or flag == 3) and self.ACK_NO == 0:
-                print(f'{c.RED}[log]{c.GREEN} Received!{c.END}')
+            self.data_sent(flag, batch_index=0)
 
         # - SINGLE BATCH ------------------------------------------------------- #
         elif isinstance(batch_list[0], bytes):
             if err:
-                for i, dgram in enumerate(batch_list):
-                    if i % 3 == 0:
+                for batch_index, dgram in enumerate(batch_list):
+                    if batch_index % ratio == 0:
                         self.send(dgram, err=True)
                     else:
                         self.send(dgram)
             else:
-                for i, dgram in enumerate(batch_list):
+                for batch_index, dgram in enumerate(batch_list):
                     self.send(dgram)
 
             # do not send next batch until MSG_ACK or NACK received
-            while self.GOT_ACK is False:
-                if self.GOT_NACK:
-                    break
-                pass
+            if not self.recv_current_ack(batch_index):
+                # if unexpected err on other side, drop connection
+                return self.send_fin()
 
             if self.GOT_NACK:
-                self.retransmission(batch_list)
+                self.retransmit_current_batch(batch_list)
 
-            if (flag == 4 or flag == 3) and self.ACK_NO == 0:
-                print(f'{c.RED}[log]{c.GREEN} Received!{c.END}')
+            self.data_sent(flag, batch_index=0)
 
         # - MULTIPLE BATCHES --------------------------------------------------- #
         elif isinstance(batch_list[0], list):
-            for i, batch in enumerate(batch_list):
+            for batch_index, batch in enumerate(batch_list):
+                # ARQ Simulation
                 if err:
-                    for k, dgram in enumerate(batch):
-                        if k % 3 == 0:
+                    for dgram_index, dgram in enumerate(batch):
+                        if dgram_index % ratio == 0:
                             self.send(dgram, err=True)
                         else:
                             self.send(dgram)
+
+                # Simple data-transmission
                 else:
-                    for k, dgram in enumerate(batch):
+                    for dgram_index, dgram in enumerate(batch):
                         self.send(dgram)
 
-                # do not send next batch until MSG_ACK or NACK received
-                while self.GOT_ACK is False:
-                    if self.GOT_NACK:
-                        break
-                    pass
+                if not self.recv_current_ack(batch_index):
+                    # if unexpected err on other side, drop connection
+                    return self.send_fin()
 
                 if self.GOT_NACK:
-                    self.retransmission(batch)
+                    self.retransmit_current_batch(batch, batch_index)
 
-                # Reset flag
-                self.GOT_ACK = False
-                self.GOT_NACK = False
+                # Reset flag after each batch
+                self.reset_ack_flags()
 
-            if (flag == 4 or flag == 3) and self.ACK_NO == i:
-                print(f'{c.RED}[log]{c.GREEN} Received!{c.END}')
+            # If communication print log
+            self.data_sent(flag, batch_index)
 
-        # STDERR
+    # ---------------------  MISC ---------------------------- #
+    def recv_current_ack(self, current_batch):
+        # add TIMEOUT
+        while self.GOT_ACK is False:
+            if self.GOT_NACK:
+                return True
+            pass
+
+        if current_batch == self.ACK_NO:
+            return True
+        # If n
         else:
-            print(f'[TYPE ERR]: {type(batch_list)}\n {batch_list}')
+            print(f'{c.RED}[log] ERR (ACK) -> not current batch{c.END}')
+            return False
 
-        # Reset flag
+    def reset_ack_flags(self):
         self.GOT_ACK = False
         self.GOT_NACK = False
 
-    def retransmission(self, batch):
+    def data_sent(self, flag, batch_index):
+        if (flag == 3 or flag == 4) and self.ACK_NO == batch_index:
+            print(f'{c.RED}[log]{c.GREEN} Received!{c.END}')
+            self.reset_ack_flags()
+
+    def retransmit_current_batch(self, batch, batch_index):
         self.GOT_NACK = False
         # Because of print -_- (too fast)
-        time.sleep(0.0001)
+        time.sleep(0.00001)
 
         print(f'{c.RED}[log]{c.END} Retransmission of dgrams {self.TO_RESEND}')
 
         if isinstance(batch, bytes):
             self.send(batch)
 
-        elif isinstance(batch, list):
+        else:
             for i, dgram in enumerate(batch):
                 if i in self.TO_RESEND:
                     self.send(dgram)
 
-        while self.GOT_ACK is False:
-            pass
+        self.recv_current_ack(batch_index)
 
         if self.GOT_NACK:
-            self.retransmission(batch)
+            self.retransmit_current_batch(batch, batch_index)
+
+
+

@@ -19,8 +19,7 @@ _FLAGS:
     2: REQUEST [LAST_BATCH, LAST_DGRAM, CRC, data='3(MSG) or 4(FILE)']
     3: MSG 
     4: FILE
-    5: ACK_MSG
-    6: ACK_FILE
+    5: ACK_DATA
     7: NACK
     8: KEEP_ALIVE
     9: FILE_NAME
@@ -107,7 +106,7 @@ class Parser:
         return crc & 0xFFFF
 
     # DONE
-    def check_checksum(self, header, data):
+    def check_sum(self, header, data):
         crc_header = struct.pack('!B I B H', header[0], header[1], header[2], 0)
         crc_data = crc_header + data
 
@@ -315,6 +314,14 @@ class Parser:
     # DONE
     @staticmethod
     def process_message(recv_data_buffer):
+        """
+            Merge and decode received message
+
+            args:
+
+            return:
+                :str
+        """
         if isinstance(recv_data_buffer[0], list):
             for batch in recv_data_buffer:
                 for i, dgram in enumerate(batch):
