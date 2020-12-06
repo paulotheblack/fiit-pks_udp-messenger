@@ -22,7 +22,7 @@ class Parser:
             formatter_class=argparse.RawDescriptionHelpFormatter,
             description=textwrap.dedent('''\
                     # ----------------------------------------------- #
-                    #   UDP Messenger, PKS assigment 2. v0.1          #
+                    #   UDP Messenger, PKS assigment 2. v.1           #
                     #       Author:     Michal Paulovic               #
                     #       STU-FIIT:   xpaulovicm1                   #
                     #       Github:     paulotheblack                 #
