@@ -40,7 +40,7 @@ class Listener(Thread):
                 self.cpu.recv_nack(header)
 
             elif header[0] == 8:  # KEEP_ALIVE
-                self.cpu.recv_ttl()
+                self.cpu.recv_keepalive()
 
             elif header[0] == 9:  # FILE_NAME
                 self.cpu.recv_data(header, data, file_name=True)

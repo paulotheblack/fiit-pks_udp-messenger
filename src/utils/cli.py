@@ -2,6 +2,7 @@ from src.sock import Sock
 from src.utils.parser import Parser
 from src.sender import Sender
 from src.keepalive import KeepAlive
+import src.utils.color as c
 
 
 class Cli:
@@ -18,8 +19,11 @@ class Cli:
             f'\t\tWelcome!\n'
             f'":c" to establish connection\n'
             f'":m" to send message\n'
+            f'":em" error message simulation\n'
             f'":f" to send file\n'
+            f'":ef" error file simulation\n'
             f'":s" to change settings\n'
+            f'":kk" stop sending keepalive\n'
             f'":q" to exit program\n'
             f'Your address is set to: {self.socket.getsockname()[0]}:{self.socket.getsockname()[1]}\n'
         )
@@ -39,10 +43,10 @@ class Cli:
             elif action == ':f':  # send file
                 self.sender.input_data(file=True)
 
-            elif action == ':em':  # ARQ Message
+            elif action == ':em':  # ErrSimulation message
                 self.sender.input_data(err=True)
 
-            elif action == ':ef':  # ARQ File
+            elif action == ':ef':  # ErrSimulation file
                 self.sender.input_data(file=True, err=True)
 
             elif action == ':d':  # disconnect
@@ -53,13 +57,12 @@ class Cli:
 
             elif action == ':kk':
                 self.keepalive.STOP = True
-                print('> Stopped sending KeepAlive')
+                print(f'{c.RED}[log]{c.END} Not responding to Keepalive')
 
             elif action == ':q':  # quit program
                 self.keepalive.STOP = True
                 self.keepalive.KILL = True
                 self.keepalive.join()
-                # self.keepalive.
                 self.sender.send_fin()
                 self.sockint.close_socket_stop()
 

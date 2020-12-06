@@ -6,30 +6,10 @@ import itertools
 import pathlib as p
 import src.utils.color as c
 
-"""
-custom header: 8B
-_FLAGS      -- B (1B)
-_BATCH_NO   -- I (4B)
-_DGRAM_NO   -- B (1B)
-_CRC        -- H (2B)
-
-_FLAGS:
-    0: SYN (two-way handshake)
-    1: ACK (     ___||___     )
-    2: REQUEST [LAST_BATCH, LAST_DGRAM, CRC, data='3(MSG) or 4(FILE)']
-    3: MSG 
-    4: FILE
-    5: ACK_DATA
-    7: NACK
-    8: KEEP_ALIVE
-    9: FILE_NAME
-    10: FIN
-"""
-
 
 class Parser:
     HEADER_SIZE = 8
-    DGRAM_SIZE = 1448  # MAX SIZE 1450
+    DGRAM_SIZE = 1430  # MAX SIZE 1450
     BATCH_SIZE = 8  # MAX 8
 
     VARS = None
@@ -63,11 +43,6 @@ class Parser:
 
     # DONE
     def set_dgram_size(self):
-        """
-            User defined DATAGRAM size (in B)
-
-            Value can be only between 1 and 1440
-        """
         print(
             f'HEADER_SIZE: {self.HEADER_SIZE}\n'
             f'DGRAM_SIZE: {self.DGRAM_SIZE}\n'
@@ -76,11 +51,11 @@ class Parser:
 
         desired_size = int(input('> SET DGRAM_SIZE to (in B): '))
 
-        while desired_size < 1 or desired_size > 1450:
-            desired_size = int(input('! Incorrect DGRAM_SIZE\n> in B (min. 1, max.1440): '))
+        while desired_size < 1 or desired_size > 1430:
+            desired_size = int(input('! Incorrect DGRAM_SIZE\n> in B (min. 1, max.1430): '))
 
         self.DGRAM_SIZE = desired_size
-        print(f'{c.RED}[log] NEW DGRAM_SIZE = {self.DGRAM_SIZE}B{c.END}')
+        print(f'{c.RED}[log]{c.GREEN} New DGRAM_SIZE = {c.END}{self.DGRAM_SIZE}B')
 
     # DONE
     @staticmethod
@@ -314,14 +289,6 @@ class Parser:
     # DONE
     @staticmethod
     def process_message(recv_data_buffer):
-        """
-            Merge and decode received message
-
-            args:
-
-            return:
-                :str
-        """
         if isinstance(recv_data_buffer[0], list):
             for batch in recv_data_buffer:
                 for i, dgram in enumerate(batch):
@@ -341,15 +308,6 @@ class Parser:
     # DONE
     @staticmethod
     def set_bit(n, k):
-        """
-            Set k-th bit as 1
-
-            Usage:
-                NACK is using (header)-DGRAM_NO field as indication for missing datagrams.
-
-            return:
-                updated n
-        """
         return (1 << k) | n
 
     # DONE
@@ -359,20 +317,7 @@ class Parser:
 
     # DONE
     def get_nack_field(self, to_resend: list):
-        """
-            create 1B field with indications of missing datagrams
-
-            bit set to 1 represents index of DGRAM in BATCH to resend
-
-            args:
-                indexes:list - list of
-
-            return:
-                0bxxxxxxxx
-        """
-
         nack_field = 0b00000000
-        # to_resend = self.find_index(batch, lambda x: x is None)
 
         for index in to_resend:
             nack_field = self.set_bit(nack_field, index)
@@ -381,12 +326,5 @@ class Parser:
 
     # DONE
     def parse_nack_field(self, header):
-        """
-
-            TODO add docstring
-
-            ta ti ja viem
-        """
         nack_field = header[2]
-
         return self.find_index(reversed(list(f'{nack_field:08b}')), lambda x: x == '1')

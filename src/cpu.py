@@ -59,9 +59,9 @@ class CPU:
         self.sender.DEST_ADDR = None
         self.SRC_ADDR = None
 
-    def recv_ttl(self):
+    def recv_keepalive(self):
         self.keepalive.RECV_TTL = True
-        print(f'{c.RED}[log]{c.END} recv KeepAlive')
+        # print(f'{c.RED}[log]{c.END} recv KeepAlive')
 
     # -------------------  ACKs/NACK ------------------------- #
     def recv_request(self, header, data):
@@ -80,14 +80,14 @@ class CPU:
     def recv_ack_data(self, header):
         self.sender.GOT_ACK = True
         self.sender.ACK_NO = header[1]
-        # print(f'[log] recv ACK')
+        # print(f'[log] recv ACK {self.sender.ACK_NO}')
 
     def recv_nack(self, header):
         self.sender.GOT_NACK = True
         self.sender.TO_RESEND = self.pars.parse_nack_field(header)
 
         # debug
-        print(f'{c.RED}[RECV_NACK]{c.END} stderr in: {self.sender.TO_RESEND} dgram/s')
+        # print(f'{c.RED}[RECV_NACK]{c.END} stderr in: {self.sender.TO_RESEND} dgram/s')
 
     # ---------------------  DATA ---------------------------- #
     def recv_data(self, header, data: bytearray, file_name=False):
@@ -102,11 +102,12 @@ class CPU:
         # if recv corrupted data
         else:
             self.RECV_DATA_BUFFER[self.CURR_BATCH_INDEX][self.CURR_DGRAM_INDEX] = None
-            print(f'[!!!] -> [{self.CURR_BATCH_INDEX}][{self.CURR_DGRAM_INDEX}]')
+            # LOG
+            # print(f'[!!!] -> [{self.CURR_BATCH_INDEX}][{self.CURR_DGRAM_INDEX}]')
 
         if not self.pars.find_index(self.RECV_DATA_BUFFER[self.CURR_BATCH_INDEX], lambda x: x == b''):
             to_resend = self.pars.find_index(self.RECV_DATA_BUFFER[self.CURR_BATCH_INDEX], lambda x: x is None)
-            if not to_resend:
+            if len(to_resend) == 0:
                 # If okay, send ACK_DATA
                 self.sender.send_ack_data(self.CURR_BATCH_INDEX)
 
@@ -119,7 +120,7 @@ class CPU:
                 self.sender.send_nack(to_resend)
                 # Reset to_resend
                 self.reset_batch(to_resend)
-                to_resend.clear()
+                to_resend = []
 
     def reset_batch(self, to_resend):
         for index, dgram in enumerate(self.RECV_DATA_BUFFER[self.CURR_BATCH_INDEX]):
@@ -133,7 +134,7 @@ class CPU:
             path, size = self.pars.write_file(self.FILE_PATH, self.FILE_NAME, self.RECV_DATA_BUFFER)
             # STDOUT PRINT
             if size:
-                print(f'{c.DARKCYAN}[FILE]({size})({self.DGRAMS_RECV}DGs) {c.RED + c.BOLD}"{path}"{c.END}')
+                print(f'{c.DARKCYAN}[{self.SRC_ADDR[0]}]{c.END}({size})({self.DGRAMS_RECV}DGs) {c.RED + c.BOLD}"{path}"{c.END}')
             # IF SIZE == 0: OSError (Permissions)
             else:
                 print(f'> ({self.DGRAMS_RECV} DR) Unable to save file to: {self.FILE_PATH}')

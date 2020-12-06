@@ -65,7 +65,7 @@ class Sender(Thread):
             dgram = self.parser.create_dgram(10, 0, 0, b'')
             self.send(dgram)
 
-            print(f'{c.PURPLE + c.BOLD}{msg}{c.END}')
+            print(f'{c.RED}[log] {c.PURPLE + c.BOLD}{msg}{c.END}')
             self.DEST_ADDR = None
             self.CONNECTED = False
 
@@ -75,18 +75,18 @@ class Sender(Thread):
     # -------------------  ACKs/NACK ------------------------- #
     def send_ack_data(self, batch_no):
         dgram = self.parser.create_dgram(5, batch_no, 0, b'')
-        # print('[log] sending ACK_DATA')
+        # print(f'[log] sending ACK {batch_no}')
         self.send(dgram)
 
     def send_nack(self, to_resend):
         nack_field = self.parser.get_nack_field(to_resend)
         dgram = self.parser.create_dgram(6, 0, nack_field, b'')
-        print(f'{c.RED}[log]{c.END} sending NACK')
+        # print(f'{c.RED}[log]{c.END} sending NACK')
         self.send(dgram)
 
     def send_keepalive(self):
         dgram = self.parser.create_dgram(8, 0, 0, b'')
-        print(f'{c.RED}[log]{c.END} sent TTL')
+        # print(f'{c.RED}[log]{c.END} sent TTL')
         self.send(dgram)
 
     # ---------------------  DATA ---------------------------- #
@@ -126,25 +126,6 @@ class Sender(Thread):
             self.send_data(flag, data, err)
 
     def send_data(self, flag, data, err=False, ratio=7):
-        """
-            Send data from user
-
-            args:
-                file: if data type is File (default=False)
-
-            Runtime:
-                1. parse data
-                2. send REQUEST
-                3. send message
-                if single datagram:
-                    not waiting for ACK
-                if single batch:
-                    waiting for ACK in case of retransmission
-                if bunch of batches:
-                    waiting for ACK after each batch in case of retransmission
-
-            return: void
-        """
 
         request, batch_list = self.parser.create_batch(flag, data)
         self.send(request)
@@ -157,15 +138,16 @@ class Sender(Thread):
             else:
                 self.send(batch_list)
 
-            # do not send next batch until MSG_ACK or NACK received
-            if not self.recv_current_ack(current_batch=0):
-                # if unexpected err on other side, drop connection
-                return self.send_fin()
+            while self.GOT_ACK is False:
+                if self.GOT_NACK:
+                    break
+                pass
 
             if self.GOT_NACK:
-                self.retransmit_current_batch(batch_list, 0)
+                self.retransmit_current_batch(batch_list)
 
-            self.data_sent(flag, batch_index=0)
+            if (flag == 4 or flag == 3) and self.ACK_NO == 0:
+                print(f'{c.RED}[log]{c.GREEN} Received!{c.END}')
 
         # - SINGLE BATCH ------------------------------------------------------- #
         elif isinstance(batch_list[0], bytes):
@@ -179,15 +161,16 @@ class Sender(Thread):
                 for batch_index, dgram in enumerate(batch_list):
                     self.send(dgram)
 
-            # do not send next batch until MSG_ACK or NACK received
-            if not self.recv_current_ack(batch_index):
-                # if unexpected err on other side, drop connection
-                return self.send_fin()
+            while self.GOT_ACK is False:
+                if self.GOT_NACK:
+                    break
+                pass
 
             if self.GOT_NACK:
-                self.retransmit_current_batch(batch_list, 0)
+                self.retransmit_current_batch(batch_list)
 
-            self.data_sent(flag, batch_index=0)
+            if (flag == 4 or flag == 3) and self.ACK_NO == 0:
+                print(f'{c.RED}[log]{c.GREEN} Received!{c.END}')
 
         # - MULTIPLE BATCHES --------------------------------------------------- #
         elif isinstance(batch_list[0], list):
@@ -205,44 +188,28 @@ class Sender(Thread):
                     for dgram_index, dgram in enumerate(batch):
                         self.send(dgram)
 
-                if not self.recv_current_ack(batch_index):
-                    # if unexpected err on other side, drop connection
-                    return self.send_fin()
+                while self.GOT_ACK is False:
+                    if self.GOT_NACK:
+                        break
+                    pass
 
                 if self.GOT_NACK:
-                    self.retransmit_current_batch(batch, batch_index)
+                    self.retransmit_current_batch(batch)
 
-                # Reset flag after each batch
+                # Reset flag
                 self.reset_ack_flags()
 
-            # If communication print log
-            self.data_sent(flag, batch_index)
+            if (flag == 4 or flag == 3) and self.ACK_NO == batch_index:
+                print(f'{c.RED}[log]{c.GREEN} Received!{c.END}')
+
+        self.reset_ack_flags()
 
     # ---------------------  MISC ---------------------------- #
-    def recv_current_ack(self, current_batch):
-        # add TIMEOUT
-        while self.GOT_ACK is False:
-            if self.GOT_NACK:
-                return True
-            pass
-
-        if current_batch == self.ACK_NO:
-            return True
-        # If n
-        else:
-            print(f'{c.RED}[log] ERR (ACK) -> not current batch{c.END}')
-            return False
-
     def reset_ack_flags(self):
         self.GOT_ACK = False
         self.GOT_NACK = False
 
-    def data_sent(self, flag, batch_index):
-        if (flag == 3 or flag == 4) and self.ACK_NO == batch_index:
-            print(f'{c.RED}[log]{c.GREEN} Received!{c.END}')
-            self.reset_ack_flags()
-
-    def retransmit_current_batch(self, batch, batch_index):
+    def retransmit_current_batch(self, batch):
         self.GOT_NACK = False
         # Because of print -_- (too fast)
         time.sleep(0.00001)
@@ -257,10 +224,11 @@ class Sender(Thread):
                 if i in self.TO_RESEND:
                     self.send(dgram)
 
-        self.recv_current_ack(batch_index)
+        while self.GOT_ACK is False:
+            pass
 
         if self.GOT_NACK:
-            self.retransmit_current_batch(batch, batch_index)
+            self.retransmit_current_batch(batch)
 
 
 
