@@ -134,7 +134,7 @@ class CPU:
             path, size = self.pars.write_file(self.FILE_PATH, self.FILE_NAME, self.RECV_DATA_BUFFER)
             # STDOUT PRINT
             if size:
-                print(f'{c.DARKCYAN}[{self.SRC_ADDR[0]}]{c.END}({size})({self.DGRAMS_RECV}DGs) {c.RED + c.BOLD}"{path}"{c.END}')
+                print(f'{c.DARKCYAN}[{self.SRC_ADDR[0]}]{c.END}({size})({self.DGRAMS_RECV}DGs){c.RED}(Rezia:{self.DGRAMS_RECV*8}B) {c.RED + c.BOLD}"{path}"{c.END}')
             # IF SIZE == 0: OSError (Permissions)
             else:
                 print(f'> ({self.DGRAMS_RECV} DR) Unable to save file to: {self.FILE_PATH}')
@@ -151,7 +151,7 @@ class CPU:
             msg = self.pars.process_message(self.RECV_DATA_BUFFER)
             # STDOUT PRINT
             print(f'{c.DARKCYAN}[{self.SRC_ADDR[0]}]{c.END}'
-                  f'({len(msg)}B)({self.DGRAMS_RECV}DGs) '
+                  f'({len(msg)}B)({self.DGRAMS_RECV}DGs){c.RED}(Rezia:{self.DGRAMS_RECV*8}B) '
                   f'{c.YELLOW + msg + c.END}')
             # reset DGs counter
             self.DGRAMS_RECV = 0
